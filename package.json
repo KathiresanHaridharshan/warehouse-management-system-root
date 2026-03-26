@@ -1,6 +1,10 @@
 {
   "name": "warehouse-management-system-root",
   "private": true,
+  "workspaces": [
+    "client",
+    "server"
+  ],
   "scripts": {
     "install-all": "npm install --prefix client && npm install --prefix server",
     "dev": "concurrently \"npm run dev --prefix client\" \"npm start --prefix server\"",
