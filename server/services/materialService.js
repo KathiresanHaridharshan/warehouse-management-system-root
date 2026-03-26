@@ -3,23 +3,23 @@ const materialRepository = require('../data/materialRepository');
 const LOW_STOCK_THRESHOLD = 10;
 
 class MaterialService {
-  async getAllMaterials(search = '') {
-    const materials = await materialRepository.getAll(search);
+  getAllMaterials(search = '') {
+    const materials = materialRepository.getAll(search);
     return materials.map(m => ({
       ...m,
-      isLowStock: parseInt(m.quantity) <= LOW_STOCK_THRESHOLD
+      isLowStock: m.quantity <= LOW_STOCK_THRESHOLD
     }));
   }
 
-  async getMaterialById(id) {
-    const material = await materialRepository.getById(id);
+  getMaterialById(id) {
+    const material = materialRepository.getById(id);
     if (!material) {
       throw { status: 404, message: 'Material not found' };
     }
-    return { ...material, isLowStock: parseInt(material.quantity) <= LOW_STOCK_THRESHOLD };
+    return { ...material, isLowStock: material.quantity <= LOW_STOCK_THRESHOLD };
   }
 
-  async createMaterial(data) {
+  createMaterial(data) {
     // Validate required fields
     if (!data.itemCode || !data.itemCode.trim()) {
       throw { status: 400, message: 'Item code is required' };
@@ -29,13 +29,13 @@ class MaterialService {
     }
 
     // Check for duplicate item code
-    const existing = await materialRepository.getByItemCode(data.itemCode.trim());
+    const existing = materialRepository.getByItemCode(data.itemCode.trim());
     if (existing) {
       throw { status: 409, message: `Item code "${data.itemCode}" already exists` };
     }
 
     // Auto-assign pallet slot
-    const palletSlot = await materialRepository.getNextAvailableSlot();
+    const palletSlot = materialRepository.getNextAvailableSlot();
     if (!palletSlot) {
       throw { status: 400, message: 'No available pallet slots' };
     }
@@ -52,7 +52,7 @@ class MaterialService {
       throw { status: 400, message: 'Invalid color hex format. Use #RRGGBB' };
     }
 
-    const material = await materialRepository.create({
+    const material = materialRepository.create({
       itemCode: data.itemCode.trim(),
       itemName: data.itemName.trim(),
       supplier: (data.supplier || '').trim(),
@@ -65,7 +65,7 @@ class MaterialService {
     });
 
     // Log transaction
-    await materialRepository.logTransaction({
+    materialRepository.logTransaction({
       materialId: material.id,
       itemName: material.itemName,
       type: 'ADD',
@@ -73,17 +73,17 @@ class MaterialService {
       newQuantity: quantity
     });
 
-    return { ...material, isLowStock: parseInt(material.quantity) <= LOW_STOCK_THRESHOLD };
+    return { ...material, isLowStock: material.quantity <= LOW_STOCK_THRESHOLD };
   }
 
-  async updateMaterial(id, data) {
+  updateMaterial(id, data) {
     // Ensure material exists
-    const oldMaterial = await this.getMaterialById(id);
+    const oldMaterial = this.getMaterialById(id);
 
     // Validate item code uniqueness if changing
     if (data.itemCode) {
-      const existing = await materialRepository.getByItemCode(data.itemCode.trim());
-      if (existing && parseInt(existing.id) !== parseInt(id)) {
+      const existing = materialRepository.getByItemCode(data.itemCode.trim());
+      if (existing && existing.id !== id) {
         throw { status: 409, message: `Item code "${data.itemCode}" already exists` };
       }
     }
@@ -102,12 +102,12 @@ class MaterialService {
       throw { status: 400, message: 'Invalid color hex format. Use #RRGGBB' };
     }
 
-    const material = await materialRepository.update(id, data);
+    const material = materialRepository.update(id, data);
 
     // Log transaction if quantity changed
-    if (data.quantity !== undefined && parseInt(data.quantity) !== parseInt(oldMaterial.quantity)) {
-      const delta = parseInt(data.quantity) - parseInt(oldMaterial.quantity);
-      await materialRepository.logTransaction({
+    if (data.quantity !== undefined && data.quantity !== oldMaterial.quantity) {
+      const delta = data.quantity - oldMaterial.quantity;
+      materialRepository.logTransaction({
         materialId: id,
         itemName: material.itemName,
         type: delta > 0 ? 'INCREASE' : 'DECREASE',
@@ -116,28 +116,28 @@ class MaterialService {
       });
     }
 
-    return { ...material, isLowStock: parseInt(material.quantity) <= LOW_STOCK_THRESHOLD };
+    return { ...material, isLowStock: material.quantity <= LOW_STOCK_THRESHOLD };
   }
 
-  async adjustQuantity(id, delta) {
+  adjustQuantity(id, delta) {
     if (!Number.isInteger(delta)) {
       throw { status: 400, message: 'Delta must be an integer' };
     }
 
     // Ensure material exists
-    await this.getMaterialById(id);
+    this.getMaterialById(id);
 
-    const result = await materialRepository.updateQuantity(id, delta);
+    const result = materialRepository.updateQuantity(id, delta);
     if (result.error) {
       throw { status: 400, message: result.error };
     }
-    return { ...result, isLowStock: parseInt(result.quantity) <= LOW_STOCK_THRESHOLD };
+    return { ...result, isLowStock: result.quantity <= LOW_STOCK_THRESHOLD };
   }
 
-  async uploadImage(id, imageURL) {
-    await this.getMaterialById(id);
-    const material = await materialRepository.updateImage(id, imageURL);
-    return { ...material, isLowStock: parseInt(material.quantity) <= LOW_STOCK_THRESHOLD };
+  uploadImage(id, imageURL) {
+    this.getMaterialById(id);
+    const material = materialRepository.updateImage(id, imageURL);
+    return { ...material, isLowStock: material.quantity <= LOW_STOCK_THRESHOLD };
   }
 
   async deleteMaterial(id) {

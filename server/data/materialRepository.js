@@ -1,89 +1,82 @@
 const { getDatabase } = require('../db/database');
 
 class MaterialRepository {
-  async getAll(search = '') {
-    const db = await getDatabase();
+  getAll(search = '') {
+    const db = getDatabase();
     if (search) {
-      const result = await db.query(`
+      return db.prepare(`
         SELECT * FROM materials
-        WHERE itemName ILIKE $1 OR itemCode ILIKE $2
+        WHERE itemName LIKE ? OR itemCode LIKE ?
         ORDER BY palletSlot ASC
-      `, [`%${search}%`, `%${search}%`]);
-      return result.rows;
+      `).all(`%${search}%`, `%${search}%`);
     }
-    const result = await db.query('SELECT * FROM materials ORDER BY palletSlot ASC');
-    return result.rows;
+    return db.prepare('SELECT * FROM materials ORDER BY palletSlot ASC').all();
   }
 
-  async getById(id) {
-    const db = await getDatabase();
-    const result = await db.query('SELECT * FROM materials WHERE id = $1', [id]);
-    return result.rows[0];
+  getById(id) {
+    const db = getDatabase();
+    return db.prepare('SELECT * FROM materials WHERE id = ?').get(id);
   }
 
-  async getByItemCode(itemCode) {
-    const db = await getDatabase();
-    const result = await db.query('SELECT * FROM materials WHERE itemCode = $1', [itemCode]);
-    return result.rows[0];
+  getByItemCode(itemCode) {
+    const db = getDatabase();
+    return db.prepare('SELECT * FROM materials WHERE itemCode = ?').get(itemCode);
   }
 
-  async getNextAvailableSlot() {
-    const db = await getDatabase();
-    const result = await db.query('SELECT palletSlot FROM materials ORDER BY palletSlot ASC');
-    const usedSlots = result.rows.map(r => r.palletSlot);
+  getNextAvailableSlot() {
+    const db = getDatabase();
+    const result = db.prepare('SELECT palletSlot FROM materials ORDER BY palletSlot ASC').all();
+    const usedSlots = result.map(r => r.palletSlot);
     for (let i = 1; i <= 100; i++) {
         if (!usedSlots.includes(i)) return i;
     }
     return null;
   }
 
-  async create(material) {
-    const db = await getDatabase();
-    const result = await db.query(`
+  create(material) {
+    const db = getDatabase();
+    const stmt = db.prepare(`
       INSERT INTO materials (itemCode, itemName, supplier, location, colorHex, imageURL, quantity, description, palletSlot)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-      RETURNING *
-    `, [material.itemCode, material.itemName, material.supplier, material.location, material.colorHex, material.imageURL, material.quantity, material.description, material.palletSlot]);
-    return result.rows[0];
+      VALUES (@itemCode, @itemName, @supplier, @location, @colorHex, @imageURL, @quantity, @description, @palletSlot)
+    `);
+    const result = stmt.run(material);
+    return this.getById(result.lastInsertRowid);
   }
 
-  async update(id, fields) {
-    const db = await getDatabase();
+  update(id, fields) {
+    const db = getDatabase();
     const setClauses = [];
-    const values = [];
-    let paramIndex = 1;
+    const values = {};
 
     const allowedFields = ['itemCode', 'itemName', 'supplier', 'location', 'colorHex', 'imageURL', 'quantity', 'description'];
     for (const field of allowedFields) {
       if (fields[field] !== undefined) {
-        setClauses.push(`${field} = $${paramIndex}`);
-        values.push(fields[field]);
-        paramIndex++;
+        setClauses.push(`${field} = @${field}`);
+        values[field] = fields[field];
       }
     }
 
     if (setClauses.length === 0) return this.getById(id);
 
-    setClauses.push(`updatedAt = CURRENT_TIMESTAMP`);
-    values.push(id);
+    setClauses.push("updatedAt = (datetime('now'))");
+    values.id = id;
 
-    const query = `UPDATE materials SET ${setClauses.join(', ')} WHERE id = $${paramIndex} RETURNING *`;
-    const result = await db.query(query, values);
-    return result.rows[0];
+    db.prepare(`UPDATE materials SET ${setClauses.join(', ')} WHERE id = @id`).run(values);
+    return this.getById(id);
   }
 
-  async updateQuantity(id, delta) {
-    const db = await getDatabase();
-    const material = await this.getById(id);
+  updateQuantity(id, delta) {
+    const db = getDatabase();
+    const material = this.getById(id);
     if (!material) return null;
 
     const newQty = parseInt(material.quantity) + delta;
     if (newQty < 0) return { error: 'Quantity cannot be negative' };
 
-    await db.query("UPDATE materials SET quantity = $1, updatedAt = CURRENT_TIMESTAMP WHERE id = $2", [newQty, id]);
+    db.prepare("UPDATE materials SET quantity = ?, updatedAt = (datetime('now')) WHERE id = ?").run(newQty, id);
     
     // Log transaction
-    await this.logTransaction({
+    this.logTransaction({
       materialId: id,
       itemName: material.itemName,
       type: delta > 0 ? 'INCREASE' : 'DECREASE',
@@ -94,31 +87,31 @@ class MaterialRepository {
     return this.getById(id);
   }
 
-  async logTransaction(tx) {
-    const db = await getDatabase();
-    await db.query(`
+  logTransaction(tx) {
+    const db = getDatabase();
+    const stmt = db.prepare(`
       INSERT INTO transactions (materialId, itemName, type, quantityChange, newQuantity, timestamp)
-      VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)
-    `, [tx.materialId, tx.itemName, tx.type, tx.quantityChange, tx.newQuantity]);
+      VALUES (@materialId, @itemName, @type, @quantityChange, @newQuantity, (datetime('now')))
+    `);
+    stmt.run(tx);
   }
 
-  async getAllTransactions() {
-    const db = await getDatabase();
-    const result = await db.query('SELECT * FROM transactions ORDER BY timestamp DESC');
-    return result.rows;
+  getAllTransactions() {
+    const db = getDatabase();
+    return db.prepare('SELECT * FROM transactions ORDER BY timestamp DESC').all();
   }
 
-  async updateImage(id, imageURL) {
-    const db = await getDatabase();
-    const result = await db.query("UPDATE materials SET imageURL = $1, updatedAt = CURRENT_TIMESTAMP WHERE id = $2 RETURNING *", [imageURL, id]);
-    return result.rows[0];
+  updateImage(id, imageURL) {
+    const db = getDatabase();
+    db.prepare("UPDATE materials SET imageURL = ?, updatedAt = (datetime('now')) WHERE id = ?").run(imageURL, id);
+    return this.getById(id);
   }
 
-  async delete(id) {
-    const db = await getDatabase();
-    const material = await this.getById(id);
+  delete(id) {
+    const db = getDatabase();
+    const material = this.getById(id);
     if (!material) return null;
-    await db.query('DELETE FROM materials WHERE id = $1', [id]);
+    db.prepare('DELETE FROM materials WHERE id = ?').run(id);
     return material;
   }
 }

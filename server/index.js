@@ -3,10 +3,6 @@ const cors = require('cors');
 const path = require('path');
 const materialRoutes = require('./routes/materialRoutes');
 
-const { initializeSchema } = require('./db/database');
-
-// Initialize DB schema (async but we don't strictly need to await it here for startup logs)
-initializeSchema().catch(err => console.error('Database initialization failed:', err));
 
 const app = express();
 const PORT = process.env.PORT || 5001;

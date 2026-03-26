@@ -13,10 +13,5 @@
   },
   "devDependencies": {
     "concurrently": "^9.2.1"
-  },
-  "dependencies": {
-    "@vercel/postgres": "^0.10.0",
-    "dotenv": "^17.3.1",
-    "pg": "^8.20.0"
   }
 }
