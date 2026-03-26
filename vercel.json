@@ -1,7 +1,7 @@
 {
   "buildCommand": "npm run build --prefix client",
   "outputDirectory": "client/dist",
-  "framework": "vite",
+  "framework": "client",
   "rewrites": [
     { "source": "/api/(.*)", "destination": "http://localhost:5001/api/$1" },
     { "source": "/uploads/(.*)", "destination": "http://localhost:5001/uploads/$1" },
