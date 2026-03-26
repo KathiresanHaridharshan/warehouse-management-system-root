@@ -1,54 +1,49 @@
-const Database = require('better-sqlite3');
-const path = require('path');
+const { Pool } = require('pg');
+require('dotenv').config();
 
-const DB_PATH = path.join(__dirname, 'warehouse.db');
-
-let db;
-
-function getDatabase() {
-  if (!db) {
-    db = new Database(DB_PATH);
-    db.pragma('journal_mode = WAL');
-    db.pragma('foreign_keys = ON');
-    initializeSchema();
+const pool = new Pool({
+  connectionString: process.env.POSTGRES_URL || process.env.DATABASE_URL,
+  ssl: {
+    rejectUnauthorized: false
   }
-  return db;
+});
+
+async function getDatabase() {
+  return pool;
 }
 
-function initializeSchema() {
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS materials (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      itemCode TEXT UNIQUE NOT NULL,
-      itemName TEXT NOT NULL,
-      supplier TEXT DEFAULT '',
-      location TEXT DEFAULT '',
-      colorHex TEXT DEFAULT '#cccccc',
-      imageURL TEXT DEFAULT '',
-      quantity INTEGER DEFAULT 0 CHECK(quantity >= 0),
-      description TEXT DEFAULT '',
-      palletSlot INTEGER UNIQUE CHECK(palletSlot >= 1 AND palletSlot <= 100),
-      createdAt TEXT DEFAULT (datetime('now')),
-      updatedAt TEXT DEFAULT (datetime('now'))
-    );
+async function initializeSchema() {
+  const client = await pool.connect();
+  try {
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS materials (
+        id SERIAL PRIMARY KEY,
+        itemCode TEXT UNIQUE NOT NULL,
+        itemName TEXT NOT NULL,
+        supplier TEXT DEFAULT '',
+        location TEXT DEFAULT '',
+        colorHex TEXT DEFAULT '#cccccc',
+        imageURL TEXT DEFAULT '',
+        quantity INTEGER DEFAULT 0 CHECK(quantity >= 0),
+        description TEXT DEFAULT '',
+        palletSlot INTEGER UNIQUE CHECK(palletSlot >= 1 AND palletSlot <= 100),
+        createdAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
 
-    CREATE TABLE IF NOT EXISTS transactions (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      materialId INTEGER,
-      itemName TEXT NOT NULL,
-      type TEXT NOT NULL, -- 'ADD', 'INCREASE', 'DECREASE', 'UPDATE', 'DELETE'
-      quantityChange INTEGER DEFAULT 0,
-      newQuantity INTEGER DEFAULT 0,
-      timestamp TEXT DEFAULT (datetime('now'))
-    );
-  `);
-}
-
-function closeDatabase() {
-  if (db) {
-    db.close();
-    db = null;
+      CREATE TABLE IF NOT EXISTS transactions (
+        id SERIAL PRIMARY KEY,
+        materialId INTEGER,
+        itemName TEXT NOT NULL,
+        type TEXT NOT NULL,
+        quantityChange INTEGER DEFAULT 0,
+        newQuantity INTEGER DEFAULT 0,
+        timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+  } finally {
+    client.release();
   }
 }
 
-module.exports = { getDatabase, closeDatabase };
+module.exports = { getDatabase, initializeSchema };

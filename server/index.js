@@ -3,6 +3,11 @@ const cors = require('cors');
 const path = require('path');
 const materialRoutes = require('./routes/materialRoutes');
 
+const { initializeSchema } = require('./db/database');
+
+// Initialize DB schema (async but we don't strictly need to await it here for startup logs)
+initializeSchema().catch(err => console.error('Database initialization failed:', err));
+
 const app = express();
 const PORT = process.env.PORT || 5001;
 
@@ -28,6 +33,10 @@ app.use((err, req, res, next) => {
   res.status(500).json({ success: false, message: 'Internal server error' });
 });
 
-app.listen(PORT, () => {
-  console.log(`🏭 Warehouse server running on http://localhost:${PORT}`);
-});
+if (process.env.NODE_ENV !== 'production' || !process.env.VERCEL) {
+  app.listen(PORT, () => {
+    console.log(`🏭 Warehouse server running on http://localhost:${PORT}`);
+  });
+}
+
+module.exports = app;

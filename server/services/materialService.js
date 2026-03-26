@@ -3,23 +3,23 @@ const materialRepository = require('../data/materialRepository');
 const LOW_STOCK_THRESHOLD = 10;
 
 class MaterialService {
-  getAllMaterials(search = '') {
-    const materials = materialRepository.getAll(search);
+  async getAllMaterials(search = '') {
+    const materials = await materialRepository.getAll(search);
     return materials.map(m => ({
       ...m,
-      isLowStock: m.quantity <= LOW_STOCK_THRESHOLD
+      isLowStock: parseInt(m.quantity) <= LOW_STOCK_THRESHOLD
     }));
   }
 
-  getMaterialById(id) {
-    const material = materialRepository.getById(id);
+  async getMaterialById(id) {
+    const material = await materialRepository.getById(id);
     if (!material) {
       throw { status: 404, message: 'Material not found' };
     }
-    return { ...material, isLowStock: material.quantity <= LOW_STOCK_THRESHOLD };
+    return { ...material, isLowStock: parseInt(material.quantity) <= LOW_STOCK_THRESHOLD };
   }
 
-  createMaterial(data) {
+  async createMaterial(data) {
     // Validate required fields
     if (!data.itemCode || !data.itemCode.trim()) {
       throw { status: 400, message: 'Item code is required' };
@@ -29,13 +29,13 @@ class MaterialService {
     }
 
     // Check for duplicate item code
-    const existing = materialRepository.getByItemCode(data.itemCode.trim());
+    const existing = await materialRepository.getByItemCode(data.itemCode.trim());
     if (existing) {
       throw { status: 409, message: `Item code "${data.itemCode}" already exists` };
     }
 
     // Auto-assign pallet slot
-    const palletSlot = materialRepository.getNextAvailableSlot();
+    const palletSlot = await materialRepository.getNextAvailableSlot();
     if (!palletSlot) {
       throw { status: 400, message: 'No available pallet slots' };
     }
@@ -52,7 +52,7 @@ class MaterialService {
       throw { status: 400, message: 'Invalid color hex format. Use #RRGGBB' };
     }
 
-    const material = materialRepository.create({
+    const material = await materialRepository.create({
       itemCode: data.itemCode.trim(),
       itemName: data.itemName.trim(),
       supplier: (data.supplier || '').trim(),
@@ -65,7 +65,7 @@ class MaterialService {
     });
 
     // Log transaction
-    materialRepository.logTransaction({
+    await materialRepository.logTransaction({
       materialId: material.id,
       itemName: material.itemName,
       type: 'ADD',
@@ -73,17 +73,17 @@ class MaterialService {
       newQuantity: quantity
     });
 
-    return { ...material, isLowStock: material.quantity <= LOW_STOCK_THRESHOLD };
+    return { ...material, isLowStock: parseInt(material.quantity) <= LOW_STOCK_THRESHOLD };
   }
 
-  updateMaterial(id, data) {
+  async updateMaterial(id, data) {
     // Ensure material exists
-    const oldMaterial = this.getMaterialById(id);
+    const oldMaterial = await this.getMaterialById(id);
 
     // Validate item code uniqueness if changing
     if (data.itemCode) {
-      const existing = materialRepository.getByItemCode(data.itemCode.trim());
-      if (existing && existing.id !== id) {
+      const existing = await materialRepository.getByItemCode(data.itemCode.trim());
+      if (existing && parseInt(existing.id) !== parseInt(id)) {
         throw { status: 409, message: `Item code "${data.itemCode}" already exists` };
       }
     }
@@ -102,12 +102,12 @@ class MaterialService {
       throw { status: 400, message: 'Invalid color hex format. Use #RRGGBB' };
     }
 
-    const material = materialRepository.update(id, data);
+    const material = await materialRepository.update(id, data);
 
     // Log transaction if quantity changed
-    if (data.quantity !== undefined && data.quantity !== oldMaterial.quantity) {
-      const delta = data.quantity - oldMaterial.quantity;
-      materialRepository.logTransaction({
+    if (data.quantity !== undefined && parseInt(data.quantity) !== parseInt(oldMaterial.quantity)) {
+      const delta = parseInt(data.quantity) - parseInt(oldMaterial.quantity);
+      await materialRepository.logTransaction({
         materialId: id,
         itemName: material.itemName,
         type: delta > 0 ? 'INCREASE' : 'DECREASE',
@@ -116,47 +116,47 @@ class MaterialService {
       });
     }
 
-    return { ...material, isLowStock: material.quantity <= LOW_STOCK_THRESHOLD };
+    return { ...material, isLowStock: parseInt(material.quantity) <= LOW_STOCK_THRESHOLD };
   }
 
-  adjustQuantity(id, delta) {
+  async adjustQuantity(id, delta) {
     if (!Number.isInteger(delta)) {
       throw { status: 400, message: 'Delta must be an integer' };
     }
 
     // Ensure material exists
-    this.getMaterialById(id);
+    await this.getMaterialById(id);
 
-    const result = materialRepository.updateQuantity(id, delta);
+    const result = await materialRepository.updateQuantity(id, delta);
     if (result.error) {
       throw { status: 400, message: result.error };
     }
-    return { ...result, isLowStock: result.quantity <= LOW_STOCK_THRESHOLD };
+    return { ...result, isLowStock: parseInt(result.quantity) <= LOW_STOCK_THRESHOLD };
   }
 
-  uploadImage(id, imageURL) {
-    this.getMaterialById(id);
-    const material = materialRepository.updateImage(id, imageURL);
-    return { ...material, isLowStock: material.quantity <= LOW_STOCK_THRESHOLD };
+  async uploadImage(id, imageURL) {
+    await this.getMaterialById(id);
+    const material = await materialRepository.updateImage(id, imageURL);
+    return { ...material, isLowStock: parseInt(material.quantity) <= LOW_STOCK_THRESHOLD };
   }
 
-  deleteMaterial(id) {
-    const material = this.getMaterialById(id);
+  async deleteMaterial(id) {
+    const material = await this.getMaterialById(id);
     
     // Log transaction before deletion
-    materialRepository.logTransaction({
+    await materialRepository.logTransaction({
       materialId: id,
       itemName: material.itemName,
       type: 'DELETE',
-      quantityChange: -material.quantity,
+      quantityChange: -parseInt(material.quantity),
       newQuantity: 0
     });
 
-    return materialRepository.delete(id);
+    return await materialRepository.delete(id);
   }
 
-  getTransactionHistory() {
-    return materialRepository.getAllTransactions();
+  async getTransactionHistory() {
+    return await materialRepository.getAllTransactions();
   }
 }
 

@@ -32,10 +32,10 @@ const upload = multer({
 });
 
 // GET /api/materials — list all (supports ?search=)
-router.get('/', (req, res) => {
+router.get('/', async (req, res) => {
   try {
     const search = req.query.search || '';
-    const materials = materialService.getAllMaterials(search);
+    const materials = await materialService.getAllMaterials(search);
     res.json({ success: true, data: materials });
   } catch (err) {
     res.status(err.status || 500).json({ success: false, message: err.message || 'Server error' });
@@ -43,9 +43,9 @@ router.get('/', (req, res) => {
 });
 
 // GET /api/materials/transactions/history
-router.get('/transactions/history', (req, res) => {
+router.get('/transactions/history', async (req, res) => {
   try {
-    const history = materialService.getTransactionHistory();
+    const history = await materialService.getTransactionHistory();
     res.json({ success: true, data: history });
   } catch (err) {
     res.status(err.status || 500).json({ success: false, message: err.message || 'Server error' });
@@ -53,9 +53,9 @@ router.get('/transactions/history', (req, res) => {
 });
 
 // GET /api/materials/:id
-router.get('/:id', (req, res) => {
+router.get('/:id', async (req, res) => {
   try {
-    const material = materialService.getMaterialById(parseInt(req.params.id));
+    const material = await materialService.getMaterialById(parseInt(req.params.id));
     res.json({ success: true, data: material });
   } catch (err) {
     res.status(err.status || 500).json({ success: false, message: err.message || 'Server error' });
@@ -63,9 +63,9 @@ router.get('/:id', (req, res) => {
 });
 
 // POST /api/materials — create
-router.post('/', (req, res) => {
+router.post('/', async (req, res) => {
   try {
-    const material = materialService.createMaterial(req.body);
+    const material = await materialService.createMaterial(req.body);
     res.status(201).json({ success: true, data: material });
   } catch (err) {
     res.status(err.status || 500).json({ success: false, message: err.message || 'Server error' });
@@ -73,9 +73,9 @@ router.post('/', (req, res) => {
 });
 
 // PUT /api/materials/:id — update
-router.put('/:id', (req, res) => {
+router.put('/:id', async (req, res) => {
   try {
-    const material = materialService.updateMaterial(parseInt(req.params.id), req.body);
+    const material = await materialService.updateMaterial(parseInt(req.params.id), req.body);
     res.json({ success: true, data: material });
   } catch (err) {
     res.status(err.status || 500).json({ success: false, message: err.message || 'Server error' });
@@ -83,13 +83,13 @@ router.put('/:id', (req, res) => {
 });
 
 // PATCH /api/materials/:id/quantity — adjust quantity
-router.patch('/:id/quantity', (req, res) => {
+router.patch('/:id/quantity', async (req, res) => {
   try {
     const delta = parseInt(req.body.delta);
     if (isNaN(delta)) {
       return res.status(400).json({ success: false, message: 'Delta must be a number' });
     }
-    const material = materialService.adjustQuantity(parseInt(req.params.id), delta);
+    const material = await materialService.adjustQuantity(parseInt(req.params.id), delta);
     res.json({ success: true, data: material });
   } catch (err) {
     res.status(err.status || 500).json({ success: false, message: err.message || 'Server error' });
@@ -97,9 +97,9 @@ router.patch('/:id/quantity', (req, res) => {
 });
 
 // DELETE /api/materials/:id
-router.delete('/:id', (req, res) => {
+router.delete('/:id', async (req, res) => {
   try {
-    const material = materialService.deleteMaterial(parseInt(req.params.id));
+    const material = await materialService.deleteMaterial(parseInt(req.params.id));
     res.json({ success: true, data: material });
   } catch (err) {
     res.status(err.status || 500).json({ success: false, message: err.message || 'Server error' });
@@ -107,13 +107,13 @@ router.delete('/:id', (req, res) => {
 });
 
 // POST /api/materials/:id/image — upload image
-router.post('/:id/image', upload.single('image'), (req, res) => {
+router.post('/:id/image', upload.single('image'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ success: false, message: 'No image file provided' });
     }
     const imageURL = `/uploads/${req.file.filename}`;
-    const material = materialService.uploadImage(parseInt(req.params.id), imageURL);
+    const material = await materialService.uploadImage(parseInt(req.params.id), imageURL);
     res.json({ success: true, data: material });
   } catch (err) {
     res.status(err.status || 500).json({ success: false, message: err.message || 'Server error' });
