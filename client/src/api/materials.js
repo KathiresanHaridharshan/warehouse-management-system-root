@@ -1,6 +1,5 @@
 import { db, storage } from '../firebase';
 import { collection, doc, getDocs, getDoc, addDoc, updateDoc, deleteDoc, query, orderBy, writeBatch, serverTimestamp } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 
 const materialsRef = collection(db, 'materials');
 const historyRef = collection(db, 'transactions');
@@ -146,14 +145,51 @@ export async function deleteMaterial(id) {
 }
 
 export async function uploadImage(id, file) {
-  const storageRef = ref(storage, `materials/${id}_${file.name}`);
-  await uploadBytes(storageRef, file);
-  const downloadURL = await getDownloadURL(storageRef);
-  
-  const docRef = doc(db, 'materials', id);
-  await updateDoc(docRef, { imageURL: downloadURL });
-  
-  return fetchMaterial(id);
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      const dataUrl = e.target.result;
+      
+      // Compress image to ensure it fits safely inside Firestore's 1MB document limit
+      const img = new Image();
+      img.src = dataUrl;
+      img.onload = async () => {
+        try {
+          const canvas = document.createElement('canvas');
+          const ctx = canvas.getContext('2d');
+          
+          let width = img.width;
+          let height = img.height;
+          const MAX_SIZE = 800; // Resize to max 800px
+          
+          if (width > height && width > MAX_SIZE) {
+            height *= MAX_SIZE / width;
+            width = MAX_SIZE;
+          } else if (height > MAX_SIZE) {
+            width *= MAX_SIZE / height;
+            height = MAX_SIZE;
+          }
+          
+          canvas.width = Math.max(width, 1);
+          canvas.height = Math.max(height, 1);
+          ctx.drawImage(img, 0, 0, width, height);
+          
+          // Output high-compression JPEG to save database space
+          const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.8);
+          
+          const docRef = doc(db, 'materials', id);
+          await updateDoc(docRef, { imageURL: compressedDataUrl });
+          
+          resolve(await fetchMaterial(id));
+        } catch (err) {
+          reject(err);
+        }
+      };
+      img.onerror = () => reject(new Error('Invalid image file'));
+    };
+    reader.onerror = () => reject(new Error('Failed to read file'));
+    reader.readAsDataURL(file);
+  });
 }
 
 export async function fetchHistory() {
