@@ -92,28 +92,15 @@ export default function App() {
     switch (view) {
       case 'home':
         return (
-          <>
-            <SearchBar
-              value={search}
-              onChange={setSearch}
-              filledCount={filledCount}
-              lowCount={lowCount}
-            />
-            <PalletGrid materials={materials} onCardClick={handleCardClick} />
-          </>
+          <PalletGrid 
+            materials={materials} 
+            onCardClick={handleCardClick} 
+            filledCount={filledCount}
+            lowCount={lowCount}
+          />
         );
       case 'inventory':
-        return (
-          <>
-            <SearchBar
-              value={search}
-              onChange={setSearch}
-              filledCount={filledCount}
-              lowCount={lowCount}
-            />
-            <InventoryTable materials={materials} onRowClick={handleCardClick} />
-          </>
-        );
+        return <InventoryTable materials={materials} onRowClick={handleCardClick} />;
       case 'history':
         return <HistoryTable history={history} />;
       case 'admin':
@@ -130,9 +117,33 @@ export default function App() {
   };
 
   return (
-    <div className="app">
+    <div className="layout-container">
       <Header view={view} onViewChange={setView} />
-      {renderContent()}
+      
+      <main className="main-content">
+        <header className="top-bar">
+          <div className="top-bar-left">
+            <h1 className="page-title">
+              {view === 'home' && 'Dashboard'}
+              {view === 'inventory' && 'Inventory Management'}
+              {view === 'history' && 'Transaction History'}
+              {view === 'admin' && 'Admin Control Panel'}
+            </h1>
+          </div>
+          <div className="top-bar-right">
+            <SearchBar
+              value={search}
+              onChange={setSearch}
+              filledCount={filledCount}
+              lowCount={lowCount}
+            />
+          </div>
+        </header>
+
+        <div className="content-area">
+          {renderContent()}
+        </div>
+      </main>
 
       {selectedMaterial && (
         <DetailModal

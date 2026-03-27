@@ -1,27 +1,22 @@
 import { useState, useRef } from 'react';
-import { createMaterial, updateMaterial, deleteMaterial, uploadImage } from '../api/materials';
-
-const emptyForm = {
-  itemCode: '',
-  itemName: '',
-  supplier: '',
-  location: '',
-  colorHex: '#cccccc',
-  quantity: 0,
-  description: '',
-};
+import { createMaterial, deleteMaterial, exportData, importData, reorderMaterials, uploadImage, updateMaterial } from '../api/materials';
 
 export default function AdminPanel({ materials, onRefresh, onToast }) {
-  const [form, setForm] = useState(emptyForm);
+  const [isAdding, setIsAdding] = useState(false);
   const [editingId, setEditingId] = useState(null);
-  const [saving, setSaving] = useState(false);
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState('');
-  const fileRef = useRef(null);
-
-  const handleChange = (field, value) => {
-    setForm((prev) => ({ ...prev, [field]: value }));
-  };
+  const fileInputRef = useRef(null);
+  const [newItem, setNewItem] = useState({
+    itemName: '',
+    itemCode: '',
+    quantity: 0,
+    minQuantity: 5,
+    unit: 'Units',
+    colorHex: '#E4242C',
+    location: '',
+    imageURL: '',
+  });
 
   const handleImageSelect = (e) => {
     const file = e.target.files[0];
@@ -31,198 +26,261 @@ export default function AdminPanel({ materials, onRefresh, onToast }) {
     }
   };
 
-  const handleEdit = (material) => {
-    setEditingId(material.id);
-    setForm({
-      itemCode: material.itemCode,
-      itemName: material.itemName,
-      supplier: material.supplier || '',
-      location: material.location || '',
-      colorHex: material.colorHex || '#cccccc',
-      quantity: material.quantity,
-      description: material.description || '',
-    });
-    setImagePreview(material.imageURL || '');
-    setImageFile(null);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
-  const handleDelete = async (id) => {
-    if (!confirm('Are you sure you want to delete this material?')) return;
-    try {
-      await deleteMaterial(id);
-      onToast('Material deleted', 'success');
-      onRefresh();
-    } catch (err) {
-      onToast(err.message, 'error');
+  const handleAdd = async () => {
+    if (!newItem.itemName || !newItem.itemCode) {
+      onToast('Name and code are required', 'error');
+      return;
     }
-  };
-
-  const handleCancel = () => {
-    setEditingId(null);
-    setForm(emptyForm);
-    setImageFile(null);
-    setImagePreview('');
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setSaving(true);
     try {
       let material;
       if (editingId) {
-        material = await updateMaterial(editingId, form);
-        onToast('Material updated', 'success');
+        material = await updateMaterial(editingId, newItem);
       } else {
-        material = await createMaterial(form);
-        onToast('Material added', 'success');
+        material = await createMaterial(newItem);
       }
 
       if (imageFile && material.id) {
         await uploadImage(material.id, imageFile);
       }
 
-      handleCancel();
+      setNewItem({
+        itemName: '',
+        itemCode: '',
+        quantity: 0,
+        minQuantity: 5,
+        unit: 'Units',
+        colorHex: '#E4242C',
+        location: '',
+        imageURL: '',
+      });
+      setImageFile(null);
+      setImagePreview('');
+      setIsAdding(false);
+      setEditingId(null);
+      onRefresh();
+      onToast(`Material ${editingId ? 'updated' : 'added'} successfully`);
+    } catch (err) {
+      onToast(err.message, 'error');
+    }
+  };
+
+  const handleDelete = async (id) => {
+    if (window.confirm('Are you sure you want to delete this material?')) {
+      await deleteMaterial(id);
+      onRefresh();
+      onToast('Material deleted');
+    }
+  };
+
+  const handleExport = () => {
+    exportData();
+    onToast('Inventory exported successfully');
+  };
+
+  const handleImport = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    try {
+      await importData(file);
+      onToast('Inventory imported successfully');
+      onRefresh();
+    } catch (err) {
+      onToast(err.message, 'error');
+    }
+  };
+
+  // Drag and Drop Logic
+  const [draggedIndex, setDraggedIndex] = useState(null);
+  const [dragOverIndex, setDragOverIndex] = useState(null);
+
+  const handleDragStart = (index) => {
+    setDraggedIndex(index);
+  };
+
+  const handleDragOver = (e, index) => {
+    e.preventDefault();
+    setDragOverIndex(index);
+  };
+
+  const handleDrop = async (e, targetIndex) => {
+    e.preventDefault();
+    if (draggedIndex === null || draggedIndex === targetIndex) return;
+
+    try {
+      await reorderMaterials(draggedIndex, targetIndex);
       onRefresh();
     } catch (err) {
       onToast(err.message, 'error');
     } finally {
-      setSaving(false);
+      setDraggedIndex(null);
+      setDragOverIndex(null);
     }
   };
 
   return (
-    <div className="admin-panel">
-      <h2 className="admin-title">{editingId ? '✏️ Edit Material' : '➕ Add New Material'}</h2>
+    <div className="admin-container">
+      <header className="admin-header">
+        <div className="admin-title-group">
+          <h2 className="admin-title">System Administration</h2>
+          <p className="admin-subtitle">Manage inventory items, data backups, and material ordering.</p>
+        </div>
+        <div className="admin-actions">
+          <label className="btn btn-secondary">
+            📥 Import Data
+            <input type="file" hidden accept=".json" onChange={handleImport} />
+          </label>
+          <button className="btn btn-secondary" onClick={handleExport}>
+            📤 Export Data
+          </button>
+          <button className="btn btn-primary" onClick={() => {
+            setEditingId(null);
+            setNewItem({
+              itemName: '', itemCode: '', quantity: 0, minQuantity: 5,
+              unit: 'Units', colorHex: '#E4242C', location: '', imageURL: ''
+            });
+            setImageFile(null);
+            setImagePreview('');
+            setIsAdding(true);
+          }}>
+            + Add New Material
+          </button>
+        </div>
+      </header>
 
-      <form className="admin-form" onSubmit={handleSubmit}>
-        <div className="form-grid">
-          <div className="form-group">
-            <label className="form-label">Item Code *</label>
-            <input
-              className="form-input"
-              type="text"
-              value={form.itemCode}
-              onChange={(e) => handleChange('itemCode', e.target.value)}
-              required
-              placeholder="e.g. 290-1001"
-            />
+      {isAdding && (
+        <div className="admin-card form-card">
+          <div className="card-header">
+            <h3>{editingId ? 'Edit Material' : 'Add New Material'}</h3>
+            <button className="close-btn" onClick={() => { setIsAdding(false); setEditingId(null); }}>×</button>
           </div>
-          <div className="form-group">
-            <label className="form-label">Item Name *</label>
-            <input
-              className="form-input"
-              type="text"
-              value={form.itemName}
-              onChange={(e) => handleChange('itemName', e.target.value)}
-              required
-              placeholder="e.g. Polycarbonate White"
-            />
-          </div>
-          <div className="form-group">
-            <label className="form-label">Supplier</label>
-            <input
-              className="form-input"
-              type="text"
-              value={form.supplier}
-              onChange={(e) => handleChange('supplier', e.target.value)}
-              placeholder="e.g. SABIC"
-            />
-          </div>
-          <div className="form-group">
-            <label className="form-label">Storage Location</label>
-            <input
-              className="form-input"
-              type="text"
-              value={form.location}
-              onChange={(e) => handleChange('location', e.target.value)}
-              placeholder="e.g. Rack A1"
-            />
-          </div>
-          <div className="form-group">
-            <label className="form-label">Color Code</label>
-            <div className="form-color-wrapper">
+          <div className="form-grid">
+            <div className="form-field">
+              <label>Item Name</label>
               <input
-                className="form-color-input"
-                type="color"
-                value={form.colorHex}
-                onChange={(e) => handleChange('colorHex', e.target.value)}
-              />
-              <input
-                className="form-input"
                 type="text"
-                value={form.colorHex}
-                onChange={(e) => handleChange('colorHex', e.target.value)}
-                placeholder="#cccccc"
-                style={{ flex: 1 }}
+                placeholder="Ex: Polycarbonate"
+                value={newItem.itemName}
+                onChange={(e) => setNewItem({ ...newItem, itemName: e.target.value })}
               />
             </div>
-          </div>
-          <div className="form-group">
-            <label className="form-label">Initial Quantity</label>
-            <input
-              className="form-input"
-              type="number"
-              min="0"
-              value={form.quantity}
-              onChange={(e) => handleChange('quantity', parseInt(e.target.value) || 0)}
-            />
-          </div>
-          <div className="form-group full-width">
-            <label className="form-label">Description / Usage</label>
-            <textarea
-              className="form-textarea"
-              value={form.description}
-              onChange={(e) => handleChange('description', e.target.value)}
-              placeholder="What is this material used for?"
-            />
-          </div>
-          <div className="form-group full-width">
-            <label className="form-label">Product Image</label>
-            <div className="image-upload-area" onClick={() => fileRef.current?.click()}>
+            <div className="form-field">
+              <label>Item Code</label>
               <input
-                ref={fileRef}
-                type="file"
-                accept="image/*"
-                onChange={handleImageSelect}
+                type="text"
+                placeholder="Ex: 290-1000"
+                value={newItem.itemCode}
+                onChange={(e) => setNewItem({ ...newItem, itemCode: e.target.value })}
               />
-              {imagePreview ? (
-                <img src={imagePreview} alt="Preview" className="image-preview" />
-              ) : (
-                <span>📷 Click to upload image (JPG, PNG, WebP — max 5MB)</span>
-              )}
+            </div>
+            <div className="form-field">
+              <label>Current Stock</label>
+              <input
+                type="number"
+                value={newItem.quantity}
+                onChange={(e) => setNewItem({ ...newItem, quantity: parseInt(e.target.value) || 0 })}
+              />
+            </div>
+
+            <div className="form-field">
+              <label>Location / Rack</label>
+              <input
+                type="text"
+                placeholder="Ex: Rack A-01"
+                value={newItem.location}
+                onChange={(e) => setNewItem({ ...newItem, location: e.target.value })}
+              />
+            </div>
+            <div className="form-field">
+              <label>Color Identifier</label>
+              <div className="color-input-wrapper">
+                <input
+                  type="color"
+                  value={newItem.colorHex}
+                  onChange={(e) => setNewItem({ ...newItem, colorHex: e.target.value })}
+                />
+                <input
+                  type="text"
+                  value={newItem.colorHex}
+                  onChange={(e) => setNewItem({ ...newItem, colorHex: e.target.value })}
+                />
+              </div>
+            </div>
+            <div className="form-field full-width">
+              <label>Product Image</label>
+              <div className="image-upload-area" onClick={() => fileInputRef.current?.click()}>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={handleImageSelect}
+                  hidden
+                />
+                {imagePreview ? (
+                  <img src={imagePreview} alt="Preview" className="image-preview" />
+                ) : (
+                  <div className="upload-placeholder">
+                    <span className="upload-icon">📷</span>
+                    <span>Click to upload image (JPG, PNG, WebP)</span>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
-          <div className="form-actions">
-            {editingId && (
-              <button type="button" className="btn btn-secondary" onClick={handleCancel}>
-                Cancel
-              </button>
-            )}
-            <button type="submit" className="btn btn-primary" disabled={saving}>
-              {saving ? 'Saving…' : editingId ? 'Update Material' : 'Add Material'}
-            </button>
+          <div className="card-actions">
+            <button className="btn btn-secondary" onClick={() => { setIsAdding(false); setEditingId(null); setImageFile(null); setImagePreview(''); }}>Cancel</button>
+            <button className="btn btn-primary" onClick={handleAdd}>{editingId ? 'Save Changes' : 'Save Material'}</button>
           </div>
         </div>
-      </form>
+      )}
 
-      <div className="admin-materials-list">
-        <h3 style={{ fontSize: '1rem', fontWeight: 600, marginBottom: 'var(--space-md)', color: 'var(--text-secondary)' }}>
-          All Materials ({materials.length})
-        </h3>
-        {materials.map((m) => (
-          <div key={m.id} className="admin-material-item">
-            <div className="admin-material-color" style={{ background: m.colorHex }} />
-            <div className="admin-material-info">
-              <div className="admin-material-name">{m.itemName}</div>
-              <div className="admin-material-code">{m.itemCode} · Qty: {m.quantity} · Slot #{m.palletSlot}</div>
+      <div className="admin-card list-card">
+        <div className="card-header">
+          <h3>Material Sequence</h3>
+          <span className="badge">Drag to reorder</span>
+        </div>
+        <div className="admin-list">
+          {materials.map((m, index) => (
+            <div
+              key={m.id}
+              className={`admin-list-item ${draggedIndex === index ? 'dragging' : ''} ${dragOverIndex === index ? 'drag-over' : ''}`}
+              draggable
+              onDragStart={() => handleDragStart(index)}
+              onDragOver={(e) => handleDragOver(e, index)}
+              onDrop={(e) => handleDrop(e, index)}
+              onDragEnd={() => { setDraggedIndex(null); setDragOverIndex(null); }}
+            >
+              <div className="drag-handle">⋮⋮</div>
+              <div className="item-color" style={{ background: m.colorHex }} />
+              <div className="item-info">
+                <span className="item-name">{m.itemName}</span>
+                <span className="item-code">{m.itemCode}</span>
+              </div>
+              <div className="item-stats">
+                <span className="stock-count">{m.quantity} Units</span>
+                <span className="location-tag">{m.location || 'N/A'}</span>
+              </div>
+              <div className="item-actions">
+                <button className="action-btn edit" onClick={() => {
+                  setEditingId(m.id);
+                  setNewItem({
+                    itemName: m.itemName || '',
+                    itemCode: m.itemCode || '',
+                    quantity: m.quantity || 0,
+                    minQuantity: m.minQuantity || 5,
+                    unit: m.unit || 'Units',
+                    colorHex: m.colorHex || '#E4242C',
+                    location: m.location || '',
+                    imageURL: m.imageURL || ''
+                  });
+                  setImagePreview(m.imageURL || '');
+                  setImageFile(null);
+                  setIsAdding(true);
+                }}>✏️</button>
+                <button className="action-btn delete" onClick={() => handleDelete(m.id)}>🗑️</button>
+              </div>
             </div>
-            <div className="admin-material-actions">
-              <button className="icon-btn" onClick={() => handleEdit(m)} title="Edit">✏️</button>
-              <button className="icon-btn delete" onClick={() => handleDelete(m.id)} title="Delete">🗑️</button>
-            </div>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
     </div>
   );

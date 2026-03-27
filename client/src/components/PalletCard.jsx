@@ -1,15 +1,5 @@
-export default function PalletCard({ material, slotNumber, onClick }) {
-  if (!material) {
-    return (
-      <div className="pallet-card empty-slot">
-        <div className="empty-card-content">
-          <span className="empty-icon">📦</span>
-          <span className="empty-label">Empty Slot</span>
-          <span className="empty-slot-number">#{slotNumber}</span>
-        </div>
-      </div>
-    );
-  }
+export default function PalletCard({ material, onClick }) {
+  if (!material) return null;
 
   const isLow = material.isLowStock;
   const imgSrc = material.imageURL || null;
@@ -18,26 +8,36 @@ export default function PalletCard({ material, slotNumber, onClick }) {
     <div
       className={`pallet-card${isLow ? ' low-stock' : ''}`}
       onClick={() => onClick(material)}
-      id={`pallet-card-${material.id}`}
     >
-      <div className="card-color-strip" style={{ background: material.colorHex }} />
-      <div className="card-image-container">
+      <div className="card-image-section">
+        <div className="card-badge category">Material</div>
+        <div className="card-badge location">{material.location || 'No Location'}</div>
         {imgSrc ? (
-          <img className="card-image" src={imgSrc} alt={material.itemName} loading="lazy" />
+          <img className="card-image" src={imgSrc} alt={material.itemName} />
         ) : (
-          <span className="card-image-placeholder">📦</span>
+          <div className="card-image-placeholder">📦</div>
         )}
-        {isLow && <span className="card-low-badge">Low</span>}
+        {isLow && <div className="card-low-indicator">LOW STOCK</div>}
       </div>
-      <div className="card-body">
-        <span className="card-name">{material.itemName}</span>
-        <span className="card-code">{material.itemCode}</span>
-        <div className="card-footer">
-          <span className={`card-quantity${isLow ? ' low' : ''}`}>
-            {material.quantity} <span style={{ fontSize: '0.65rem', fontWeight: 400, color: 'var(--text-muted)' }}>units</span>
-          </span>
-          <span className="card-color-badge" style={{ background: material.colorHex }} />
+
+      <div className="card-content">
+        <div className="card-header-info">
+          <h3 className="card-name">{material.itemName}</h3>
+          <span className="card-code">{material.itemCode}</span>
         </div>
+
+        <div className="card-details-row">
+          <div className="card-detail-item">
+            <span className="detail-label">Quantity</span>
+            <span className={`detail-value${isLow ? ' low' : ''}`}>{material.quantity} Units</span>
+          </div>
+          <div className="material-color-indicator" style={{ background: material.colorHex }} title={material.colorHex} />
+        </div>
+
+        <button className="card-action-btn">
+          View Details
+          <span className="btn-icon">→</span>
+        </button>
       </div>
     </div>
   );

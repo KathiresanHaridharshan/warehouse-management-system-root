@@ -25,7 +25,6 @@ function seed() {
   const existingCount = db.prepare('SELECT COUNT(*) as count FROM materials').get().count;
   if (existingCount > 0) {
     console.log(`Database already has ${existingCount} materials. Skipping seed.`);
-    closeDatabase();
     return;
   }
 
@@ -42,7 +41,6 @@ function seed() {
 
   insertMany(initialMaterials);
   console.log(`Seeded ${initialMaterials.length} materials successfully.`);
-  closeDatabase();
 }
 
 seed();

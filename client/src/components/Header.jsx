@@ -1,43 +1,58 @@
 export default function Header({ view, onViewChange }) {
   return (
-    <header className="header">
-      <div className="header-left">
-        <div className="header-logo">🏭</div>
-        <div>
-          <div className="header-title">Warehouse Manager</div>
-          <div className="header-subtitle">Material Pallet Tracking System</div>
+    <nav className="sidebar">
+      <div className="sidebar-brand">
+        <div className="brand-logo">🏭</div>
+        <div className="brand-name">
+          <span>Warehouse</span>
+          <span style={{ color: 'var(--accent)', fontSize: '0.7rem' }}>MANAGER</span>
         </div>
       </div>
-      <div className="header-right">
+
+      <div className="sidebar-menu">
         <button
-          className={`nav-btn${view === 'home' ? ' active' : ''}`}
+          className={`menu-item${view === 'home' ? ' active' : ''}`}
           onClick={() => onViewChange('home')}
-          id="nav-home"
+          title="Dashboard"
         >
-          🏠 Home
+          <span className="menu-icon">🏠</span>
+          <span className="menu-label">Dashboard</span>
         </button>
         <button
-          className={`nav-btn${view === 'inventory' ? ' active' : ''}`}
+          className={`menu-item${view === 'inventory' ? ' active' : ''}`}
           onClick={() => onViewChange('inventory')}
-          id="nav-inventory"
+          title="Inventory"
         >
-          📋 Inventory
+          <span className="menu-icon">📋</span>
+          <span className="menu-label">Inventory</span>
         </button>
         <button
-          className={`nav-btn${view === 'history' ? ' active' : ''}`}
+          className={`menu-item${view === 'history' ? ' active' : ''}`}
           onClick={() => onViewChange('history')}
-          id="nav-history"
+          title="History"
         >
-          🕒 History
+          <span className="menu-icon">🕒</span>
+          <span className="menu-label">History</span>
         </button>
         <button
-          className={`nav-btn${view === 'admin' ? ' active' : ''}`}
+          className={`menu-item${view === 'admin' ? ' active' : ''}`}
           onClick={() => onViewChange('admin')}
-          id="nav-admin"
+          title="Admin Settings"
         >
-          ⚙️ Admin
+          <span className="menu-icon">⚙️</span>
+          <span className="menu-label">Settings</span>
         </button>
       </div>
-    </header>
+
+      <div className="sidebar-footer">
+        <div className="user-profile">
+          <div className="user-avatar">👤</div>
+          <div className="user-info">
+            <span className="user-name">Warehouse Admin</span>
+            <span className="user-role">System Manager</span>
+          </div>
+        </div>
+      </div>
+    </nav>
   );
 }
