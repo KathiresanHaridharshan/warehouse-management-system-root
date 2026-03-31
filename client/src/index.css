@@ -1208,12 +1208,33 @@ body {
 
 .fp-floor-fullscreen .fp-slot-img {
   height: auto;
-  max-height: 40%;
+  max-height: 60%;
+  flex: 1;
 }
 
 .fp-floor-fullscreen .fp-slot-img-placeholder {
   height: auto;
-  max-height: 40%;
+  max-height: 60%;
+  flex: 1;
+  font-size: 3rem;
+}
+
+/* Increase text size for full screen slots */
+.fp-floor-fullscreen .fp-slot-name {
+  font-size: 1.1rem;
+}
+
+.fp-floor-fullscreen .fp-slot-code {
+  font-size: 0.85rem;
+}
+
+.fp-floor-fullscreen .fp-slot-qty {
+  font-size: 1.1rem;
+}
+
+.fp-floor-fullscreen .fp-slot-content {
+  padding: 12px;
+  gap: 10px;
 }
 
 /* ============================================================
