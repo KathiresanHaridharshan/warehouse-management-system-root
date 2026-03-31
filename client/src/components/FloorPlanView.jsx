@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import PalletSlot from './PalletSlot';
 import FloorPlanEditor from './FloorPlanEditor';
-import { fetchFloorPlan, saveFloorPlan, parseSlot } from '../api/materials';
+import { fetchFloorPlan, saveFloorPlan } from '../api/materials';
 
 export default function FloorPlanView({ materials, onCardClick, onToast }) {
   const [config, setConfig] = useState(null);
@@ -20,11 +20,8 @@ export default function FloorPlanView({ materials, onCardClick, onToast }) {
     }
   }, [onToast]);
 
-  useEffect(() => {
-    loadConfig();
-  }, [loadConfig]);
+  useEffect(() => { loadConfig(); }, [loadConfig]);
 
-  // Escape key to exit fullscreen
   useEffect(() => {
     const handleKey = (e) => {
       if (e.key === 'Escape' && fullscreen) setFullscreen(false);
@@ -45,11 +42,7 @@ export default function FloorPlanView({ materials, onCardClick, onToast }) {
   };
 
   if (loading) {
-    return (
-      <div className="loading-container">
-        <div className="spinner" />
-      </div>
-    );
+    return <div className="loading-container"><div className="spinner" /></div>;
   }
 
   if (!config) {
@@ -72,17 +65,12 @@ export default function FloorPlanView({ materials, onCardClick, onToast }) {
     );
   }
 
-  // Count assigned and total slots
   const totalSlots = config.rows.reduce((sum, r) => sum + r.count, 0);
-  const filledSlots = config.rows.reduce((sum, r) => {
-    return sum + r.slots.filter(s => s !== null).length;
-  }, 0);
-
-  // Find the max slot count across all rows for uniform sizing
+  const filledSlots = config.rows.reduce((sum, r) => sum + r.slots.filter(s => s !== null).length, 0);
   const maxSlots = Math.max(...config.rows.map(r => r.count));
 
-  const floorContent = (
-    <div className="fp-floor">
+  const renderFloor = (isFullscreen) => (
+    <div className={`fp-floor${isFullscreen ? ' fp-floor-fullscreen' : ''}`}>
       {config.rows.map((row, rowIdx) => (
         <div key={rowIdx} className="fp-row">
           <div className="fp-row-label">
@@ -98,6 +86,7 @@ export default function FloorPlanView({ materials, onCardClick, onToast }) {
                 onClick={onCardClick}
                 rowIndex={rowIdx}
                 slotIndex={slotIdx}
+                isFullscreen={isFullscreen}
               />
             ))}
           </div>
@@ -106,23 +95,44 @@ export default function FloorPlanView({ materials, onCardClick, onToast }) {
     </div>
   );
 
-  // Fullscreen overlay
+  // FULLSCREEN MODE — simple view, click slot opens DetailModal via onCardClick
   if (fullscreen) {
     return (
       <div className="fp-fullscreen-overlay">
         <div className="fp-fullscreen-topbar">
-          <h2 className="fp-fullscreen-title">🏭 Warehouse Floor Plan</h2>
-          <button className="fp-fullscreen-exit" onClick={() => setFullscreen(false)}>
-            ✕ Exit Fullscreen
-          </button>
+          <div className="fp-fullscreen-left">
+            <h2 className="fp-fullscreen-title">🏭 Warehouse Floor Plan</h2>
+            <div className="fp-fullscreen-stats">
+              <span><strong>{totalSlots}</strong> Pallets</span>
+              <span className="fp-stat-sep">•</span>
+              <span><strong>{filledSlots}</strong> Assigned</span>
+              <span className="fp-stat-sep">•</span>
+              <span><strong>{totalSlots - filledSlots}</strong> Empty</span>
+            </div>
+          </div>
+          <div className="fp-fullscreen-actions">
+            <button className="btn btn-secondary" onClick={() => { setFullscreen(false); setEditing(true); }}>✏️ Edit Layout</button>
+            <button className="fp-fullscreen-exit" onClick={() => setFullscreen(false)}>
+              ✕ Exit
+            </button>
+          </div>
         </div>
         <div className="fp-fullscreen-content">
-          {floorContent}
+          {renderFloor(true)}
         </div>
+        {editing && (
+          <FloorPlanEditor
+            config={config}
+            materials={materials}
+            onSave={handleSave}
+            onClose={() => setEditing(false)}
+          />
+        )}
       </div>
     );
   }
 
+  // NORMAL MODE
   return (
     <div className="fp-container">
       <div className="fp-header">
@@ -132,17 +142,11 @@ export default function FloorPlanView({ materials, onCardClick, onToast }) {
             Warehouse Floor Plan
           </h2>
           <div className="fp-stats-row">
-            <span className="fp-stat">
-              <span className="fp-stat-val">{totalSlots}</span> Pallets
-            </span>
+            <span className="fp-stat"><span className="fp-stat-val">{totalSlots}</span> Pallets</span>
             <span className="fp-stat-sep">•</span>
-            <span className="fp-stat">
-              <span className="fp-stat-val">{filledSlots}</span> Assigned
-            </span>
+            <span className="fp-stat"><span className="fp-stat-val">{filledSlots}</span> Assigned</span>
             <span className="fp-stat-sep">•</span>
-            <span className="fp-stat">
-              <span className="fp-stat-val">{totalSlots - filledSlots}</span> Empty
-            </span>
+            <span className="fp-stat"><span className="fp-stat-val">{totalSlots - filledSlots}</span> Empty</span>
           </div>
         </div>
         <div className="fp-header-actions">
@@ -171,7 +175,7 @@ export default function FloorPlanView({ materials, onCardClick, onToast }) {
         </span>
       </div>
 
-      {floorContent}
+      {renderFloor(false)}
 
       {editing && (
         <FloorPlanEditor

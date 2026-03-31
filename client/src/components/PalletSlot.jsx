@@ -1,6 +1,6 @@
 import { parseSlot } from '../api/materials';
 
-export default function PalletSlot({ slotData, materials, onClick, rowIndex, slotIndex }) {
+export default function PalletSlot({ slotData, materials, onClick, rowIndex, slotIndex, isFullscreen }) {
   const ids = parseSlot(slotData);
 
   if (ids.length === 0) {
@@ -32,10 +32,10 @@ export default function PalletSlot({ slotData, materials, onClick, rowIndex, slo
     const isLow = m.isLowStock;
     return (
       <div
-        className={`fp-slot fp-slot-filled${isLow ? ' fp-slot-low' : ''}`}
+        className={`fp-slot fp-slot-filled${isLow ? ' fp-slot-low' : ''}${isFullscreen ? ' fp-slot-clickable' : ''}`}
         style={{ '--slot-color': m.colorHex || '#cbd5e1' }}
         onClick={() => onClick && onClick(m)}
-        title={`${m.itemName} (${m.itemCode})`}
+        title={`${m.itemName} (${m.itemCode}) — Click to manage stock`}
       >
         <div className="fp-slot-color-bar" style={{ background: m.colorHex || '#cbd5e1' }} />
         <div className="fp-slot-content">
@@ -55,9 +55,9 @@ export default function PalletSlot({ slotData, materials, onClick, rowIndex, slo
     );
   }
 
-  // Two materials in one slot
+  // Two materials in one slot (dual/half-half)
   return (
-    <div className="fp-slot fp-slot-dual">
+    <div className={`fp-slot fp-slot-dual${isFullscreen ? ' fp-slot-clickable' : ''}`}>
       {mats.map((m) => {
         const isLow = m.isLowStock;
         return (

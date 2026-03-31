@@ -56,90 +56,89 @@ export default function DetailModal({ material, onClose, onUpdated }) {
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
-        <div className="modal-header">
-          <span className="modal-title">{material.itemName}</span>
-          <button className="modal-close" onClick={onClose}>✕</button>
+      <div className="detail-modal-card" onClick={(e) => e.stopPropagation()}>
+        <div className="detail-modal-header">
+          <div className="detail-modal-title">
+            <span className="dm-title-text">{material.itemName}</span>
+            <span className="dm-badge" style={{ background: material.colorHex || '#ccc' }}>
+              {material.itemCode}
+            </span>
+          </div>
+          <button className="modal-close" onClick={onClose} title="Close">✕</button>
         </div>
 
-        <div className="modal-body">
-          <div className="detail-image-section">
-            {material.imageURL ? (
-              <img className="detail-image" src={material.imageURL} alt={material.itemName} />
-            ) : (
-              <span className="detail-image-placeholder">📦</span>
-            )}
-          </div>
-
-          <div className="detail-grid">
-            <div className="detail-field">
-              <span className="detail-label">Item Code</span>
-              <span className="detail-value" style={{ fontFamily: 'monospace' }}>{material.itemCode}</span>
+        <div className="detail-modal-body">
+          {/* Left Column: Image & Details */}
+          <div className="dm-left">
+            <div className="dm-image-container">
+              {material.imageURL ? (
+                <img className="dm-image" src={material.imageURL} alt={material.itemName} />
+              ) : (
+                <div className="dm-image-placeholder">📦</div>
+              )}
             </div>
-            <div className="detail-field">
-              <span className="detail-label">Supplier</span>
-              <span className="detail-value">{material.supplier || '—'}</span>
-            </div>
-            <div className="detail-field">
-              <span className="detail-label">Storage Location</span>
-              <span className="detail-value">{material.location || '—'}</span>
-            </div>
-            <div className="detail-field">
-              <span className="detail-label">Color</span>
-              <div className="color-display">
-                <span className="color-swatch" style={{ background: material.colorHex }} />
-                <span className="detail-value" style={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>{material.colorHex}</span>
+            <div className="dm-info-grid">
+              <div className="dm-info-item">
+                <span className="dm-info-label">Supplier</span>
+                <span className="dm-info-val">{material.supplier || '—'}</span>
+              </div>
+              <div className="dm-info-item">
+                <span className="dm-info-label">Location</span>
+                <span className="dm-info-val">{material.location || '—'}</span>
+              </div>
+              <div className="dm-info-item">
+                <span className="dm-info-label">Low Alert</span>
+                <span className="dm-info-val">{minQty} kg</span>
               </div>
             </div>
-            <div className="detail-field">
-              <span className="detail-label">Low Stock Alert</span>
-              <span className="detail-value">{minQty} kg</span>
-            </div>
-            <div className="detail-field">
-              <span className="detail-label">Description</span>
-              <span className="detail-value">{material.description || '—'}</span>
-            </div>
           </div>
 
-          <div className="quantity-section">
-            <div className="quantity-header">
-              <div>
-                <span className="quantity-unit">Current Stock (kg)</span>
-                <div className={`quantity-current${isLow ? ' low' : ''}`}>
-                  {previewQty} kg
-                  {delta !== 0 && (
-                    <span style={{ fontSize: '0.8rem', marginLeft: 8, color: delta > 0 ? 'var(--success)' : 'var(--danger)' }}>
-                      ({delta > 0 ? '+' : ''}{delta / 25} Sack{Math.abs(delta / 25) === 1 ? '' : 's'})
-                    </span>
-                  )}
+          {/* Right Column: Quantity Management */}
+          <div className="dm-right">
+            <div className="dm-stock-card">
+              <div className="dm-stock-header">
+                <span className="dm-stock-label">Current Stock</span>
+                {isLow && <span className="dm-low-badge">⚠ LOW</span>}
+              </div>
+              
+              <div className="dm-stock-value-wrapper">
+                <span className={`dm-stock-value ${isLow ? 'low' : ''}`}>{previewQty}</span>
+                <span className="dm-stock-unit">kg</span>
+              </div>
+
+              {delta !== 0 && (
+                <div className={`dm-stock-delta ${delta > 0 ? 'positive' : 'negative'}`}>
+                  {delta > 0 ? '+' : ''}{delta} kg ({delta > 0 ? '+' : ''}{delta / 25} Sack{Math.abs(delta / 25) === 1 ? '' : 's'})
                 </div>
-              </div>
-              {isLow && <span className="qty-low-tag">⚠ LOW STOCK</span>}
+              )}
             </div>
 
-            <div className="quantity-controls">
-              <button className="qty-btn decrease" onClick={() => handleAdjust(-25)}>−25</button>
-              <input
-                className="qty-input"
-                type="number"
-                value={delta}
-                onChange={(e) => handleCustomInput(e.target.value)}
-                placeholder="±"
-              />
-              <button className="qty-btn increase" onClick={() => handleAdjust(25)}>+25</button>
+            <div className="dm-controls-wrapper">
+              <span className="dm-controls-label">Adjust Quantity (±25kg Sacks)</span>
+              <div className="dm-controls">
+                <button className="dm-btn-minus" onClick={() => handleAdjust(-25)}>−25</button>
+                <input
+                  className="dm-input-qty"
+                  type="number"
+                  value={delta}
+                  onChange={(e) => handleCustomInput(e.target.value)}
+                />
+                <button className="dm-btn-plus" onClick={() => handleAdjust(25)}>+25</button>
+              </div>
             </div>
-            {error && <p style={{ color: 'var(--danger)', fontSize: '0.8rem', marginTop: 8 }}>{error}</p>}
+
+            {error && <div className="dm-error">{error}</div>}
           </div>
         </div>
 
-        <div className="modal-actions">
+        <div className="detail-modal-footer">
           <button className="btn btn-secondary" onClick={onClose}>Cancel</button>
           <button
             className="btn btn-primary"
             onClick={handleSave}
             disabled={saving || (material.quantity + delta < 0)}
           >
-            {saving ? 'Saving…' : delta === 0 ? 'Close' : 'Save Changes'}
+            {saving ? 'Saving...' : delta === 0 ? 'Done' : 'Save Changes'}
           </button>
         </div>
       </div>
