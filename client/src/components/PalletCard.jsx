@@ -29,7 +29,7 @@ export default function PalletCard({ material, onClick }) {
         <div className="card-details-row">
           <div className="card-detail-item">
             <span className="detail-label">Quantity</span>
-            <span className={`detail-value${isLow ? ' low' : ''}`}>{material.quantity} Units</span>
+            <span className={`detail-value${isLow ? ' low' : ''}`}>{material.quantity} kg</span>
           </div>
           <div className="material-color-indicator" style={{ background: material.colorHex }} title={material.colorHex} />
         </div>

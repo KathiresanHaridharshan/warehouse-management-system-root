@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import Header from './components/Header';
 import SearchBar from './components/SearchBar';
+import FloorPlanView from './components/FloorPlanView';
 import PalletGrid from './components/PalletGrid';
 import InventoryTable from './components/InventoryTable';
 import HistoryTable from './components/HistoryTable';
@@ -9,7 +10,7 @@ import AdminPanel from './components/AdminPanel';
 import { fetchMaterials, fetchHistory } from './api/materials';
 
 export default function App() {
-  const [view, setView] = useState('home');
+  const [view, setView] = useState('floorplan');
   const [materials, setMaterials] = useState([]);
   const [history, setHistory] = useState([]);
   const [search, setSearch] = useState('');
@@ -46,7 +47,7 @@ export default function App() {
     } else {
       loadMaterials(search);
     }
-  }, [view, loadMaterials, loadHistory]); // search removed from dep to use debounce
+  }, [view, loadMaterials, loadHistory]);
 
   useEffect(() => {
     if (view === 'history') return;
@@ -80,7 +81,28 @@ export default function App() {
   const filledCount = materials.length;
   const lowCount = materials.filter((m) => m.isLowStock).length;
 
+  const getPageTitle = () => {
+    switch (view) {
+      case 'floorplan': return 'Floor Plan';
+      case 'home': return 'Materials';
+      case 'inventory': return 'Inventory Management';
+      case 'history': return 'Transaction History';
+      case 'admin': return 'Admin Control Panel';
+      default: return '';
+    }
+  };
+
   const renderContent = () => {
+    if (view === 'floorplan') {
+      return (
+        <FloorPlanView
+          materials={materials}
+          onCardClick={handleCardClick}
+          onToast={addToast}
+        />
+      );
+    }
+
     if (loading) {
       return (
         <div className="loading-container">
@@ -123,20 +145,17 @@ export default function App() {
       <main className="main-content">
         <header className="top-bar">
           <div className="top-bar-left">
-            <h1 className="page-title">
-              {view === 'home' && 'Dashboard'}
-              {view === 'inventory' && 'Inventory Management'}
-              {view === 'history' && 'Transaction History'}
-              {view === 'admin' && 'Admin Control Panel'}
-            </h1>
+            <h1 className="page-title">{getPageTitle()}</h1>
           </div>
           <div className="top-bar-right">
-            <SearchBar
-              value={search}
-              onChange={setSearch}
-              filledCount={filledCount}
-              lowCount={lowCount}
-            />
+            {view !== 'floorplan' && (
+              <SearchBar
+                value={search}
+                onChange={setSearch}
+                filledCount={filledCount}
+                lowCount={lowCount}
+              />
+            )}
           </div>
         </header>
 

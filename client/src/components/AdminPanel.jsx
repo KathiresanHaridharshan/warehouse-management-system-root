@@ -11,8 +11,7 @@ export default function AdminPanel({ materials, onRefresh, onToast }) {
     itemName: '',
     itemCode: '',
     quantity: 0,
-    minQuantity: 5,
-    unit: 'Units',
+    minQuantity: 100,
     colorHex: '#E4242C',
     location: '',
     imageURL: '',
@@ -47,8 +46,7 @@ export default function AdminPanel({ materials, onRefresh, onToast }) {
         itemName: '',
         itemCode: '',
         quantity: 0,
-        minQuantity: 5,
-        unit: 'Units',
+        minQuantity: 100,
         colorHex: '#E4242C',
         location: '',
         imageURL: '',
@@ -135,8 +133,8 @@ export default function AdminPanel({ materials, onRefresh, onToast }) {
           <button className="btn btn-primary" onClick={() => {
             setEditingId(null);
             setNewItem({
-              itemName: '', itemCode: '', quantity: 0, minQuantity: 5,
-              unit: 'Units', colorHex: '#E4242C', location: '', imageURL: ''
+              itemName: '', itemCode: '', quantity: 0, minQuantity: 100,
+              colorHex: '#E4242C', location: '', imageURL: ''
             });
             setImageFile(null);
             setImagePreview('');
@@ -173,11 +171,20 @@ export default function AdminPanel({ materials, onRefresh, onToast }) {
               />
             </div>
             <div className="form-field">
-              <label>Current Stock</label>
+              <label>Current Stock (kg)</label>
               <input
                 type="number"
                 value={newItem.quantity}
                 onChange={(e) => setNewItem({ ...newItem, quantity: parseInt(e.target.value) || 0 })}
+              />
+            </div>
+            <div className="form-field">
+              <label>Low Stock Alert (kg)</label>
+              <input
+                type="number"
+                value={newItem.minQuantity}
+                onChange={(e) => setNewItem({ ...newItem, minQuantity: parseInt(e.target.value) || 100 })}
+                placeholder="100"
               />
             </div>
 
@@ -256,7 +263,7 @@ export default function AdminPanel({ materials, onRefresh, onToast }) {
                 <span className="item-code">{m.itemCode}</span>
               </div>
               <div className="item-stats">
-                <span className="stock-count">{m.quantity} Units</span>
+                <span className="stock-count">{m.quantity} kg</span>
                 <span className="location-tag">{m.location || 'N/A'}</span>
               </div>
               <div className="item-actions">
@@ -266,8 +273,7 @@ export default function AdminPanel({ materials, onRefresh, onToast }) {
                     itemName: m.itemName || '',
                     itemCode: m.itemCode || '',
                     quantity: m.quantity || 0,
-                    minQuantity: m.minQuantity || 5,
-                    unit: m.unit || 'Units',
+                    minQuantity: m.minQuantity || 100,
                     colorHex: m.colorHex || '#E4242C',
                     location: m.location || '',
                     imageURL: m.imageURL || ''

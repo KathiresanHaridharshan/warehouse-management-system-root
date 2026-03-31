@@ -9,7 +9,8 @@ export default function DetailModal({ material, onClose, onUpdated }) {
   if (!material) return null;
 
   const previewQty = material.quantity + delta;
-  const isLow = previewQty <= 10;
+  const minQty = material.minQuantity || 100;
+  const isLow = previewQty <= minQty;
 
   const handleAdjust = (amount) => {
     const newDelta = delta + amount;
@@ -90,8 +91,12 @@ export default function DetailModal({ material, onClose, onUpdated }) {
                 <span className="detail-value" style={{ fontFamily: 'monospace', fontSize: '0.8rem' }}>{material.colorHex}</span>
               </div>
             </div>
-            <div className="detail-field full-width">
-              <span className="detail-label">Description / Usage</span>
+            <div className="detail-field">
+              <span className="detail-label">Low Stock Alert</span>
+              <span className="detail-value">{minQty} kg</span>
+            </div>
+            <div className="detail-field">
+              <span className="detail-label">Description</span>
               <span className="detail-value">{material.description || '—'}</span>
             </div>
           </div>
@@ -99,21 +104,21 @@ export default function DetailModal({ material, onClose, onUpdated }) {
           <div className="quantity-section">
             <div className="quantity-header">
               <div>
-                <span className="quantity-unit">Current Stock</span>
+                <span className="quantity-unit">Current Stock (kg)</span>
                 <div className={`quantity-current${isLow ? ' low' : ''}`}>
-                  {previewQty}
+                  {previewQty} kg
                   {delta !== 0 && (
                     <span style={{ fontSize: '0.8rem', marginLeft: 8, color: delta > 0 ? 'var(--success)' : 'var(--danger)' }}>
-                      ({delta > 0 ? '+' : ''}{delta})
+                      ({delta > 0 ? '+' : ''}{delta / 25} Sack{Math.abs(delta / 25) === 1 ? '' : 's'})
                     </span>
                   )}
                 </div>
               </div>
+              {isLow && <span className="qty-low-tag">⚠ LOW STOCK</span>}
             </div>
 
             <div className="quantity-controls">
-              <button className="qty-btn decrease" onClick={() => handleAdjust(-5)}>−5</button>
-              <button className="qty-btn decrease" onClick={() => handleAdjust(-1)}>−1</button>
+              <button className="qty-btn decrease" onClick={() => handleAdjust(-25)}>−25</button>
               <input
                 className="qty-input"
                 type="number"
@@ -121,8 +126,7 @@ export default function DetailModal({ material, onClose, onUpdated }) {
                 onChange={(e) => handleCustomInput(e.target.value)}
                 placeholder="±"
               />
-              <button className="qty-btn increase" onClick={() => handleAdjust(1)}>+1</button>
-              <button className="qty-btn increase" onClick={() => handleAdjust(5)}>+5</button>
+              <button className="qty-btn increase" onClick={() => handleAdjust(25)}>+25</button>
             </div>
             {error && <p style={{ color: 'var(--danger)', fontSize: '0.8rem', marginTop: 8 }}>{error}</p>}
           </div>

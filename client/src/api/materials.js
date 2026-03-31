@@ -1,5 +1,5 @@
 import { db, storage } from '../firebase';
-import { collection, doc, getDocs, getDoc, addDoc, updateDoc, deleteDoc, query, orderBy, writeBatch, serverTimestamp } from 'firebase/firestore';
+import { collection, doc, getDocs, getDoc, addDoc, updateDoc, deleteDoc, setDoc, query, orderBy, writeBatch, serverTimestamp } from 'firebase/firestore';
 
 const materialsRef = collection(db, 'materials');
 const historyRef = collection(db, 'transactions');
@@ -25,9 +25,9 @@ export async function fetchMaterials(search = '') {
       (m.itemCode || '').toLowerCase().includes(lower) ||
       (m.supplier || '').toLowerCase().includes(lower)
     );
-    return filtered.map(m => ({ ...m, isLowStock: m.quantity <= 10 }));
+    return filtered.map(m => ({ ...m, isLowStock: m.quantity <= (m.minQuantity || 100) }));
   }
-  return materials.map(m => ({ ...m, isLowStock: m.quantity <= 10 }));
+  return materials.map(m => ({ ...m, isLowStock: m.quantity <= (m.minQuantity || 100) }));
 }
 
 export async function fetchMaterial(id) {
@@ -35,7 +35,7 @@ export async function fetchMaterial(id) {
   const docSnap = await getDoc(docRef);
   if (!docSnap.exists()) throw new Error('Material not found');
   const material = { id: docSnap.id, ...docSnap.data() };
-  return { ...material, isLowStock: material.quantity <= 10 };
+  return { ...material, isLowStock: material.quantity <= (material.minQuantity || 100) };
 }
 
 export async function createMaterial(material) {
@@ -54,6 +54,7 @@ export async function createMaterial(material) {
     colorHex: material.colorHex || '#cccccc',
     imageURL: material.imageURL || '',
     quantity: qty,
+    minQuantity: parseInt(material.minQuantity) || 100,
     description: (material.description || '').trim(),
     createdAt: serverTimestamp()
   };
@@ -68,7 +69,7 @@ export async function createMaterial(material) {
     newQuantity: qty
   });
 
-  return { id: docRef.id, ...newMaterial, isLowStock: newMaterial.quantity <= 10 };
+  return { id: docRef.id, ...newMaterial, isLowStock: newMaterial.quantity <= (newMaterial.minQuantity || 100) };
 }
 
 export async function updateMaterial(id, updates) {
@@ -101,7 +102,7 @@ export async function updateMaterial(id, updates) {
   }
 
   await updateDoc(docRef, updatedMaterial);
-  return { id, ...updatedMaterial, isLowStock: updatedMaterial.quantity <= 10 };
+  return { id, ...updatedMaterial, isLowStock: updatedMaterial.quantity <= (updatedMaterial.minQuantity || 100) };
 }
 
 export async function adjustQuantity(id, delta) {
@@ -123,7 +124,7 @@ export async function adjustQuantity(id, delta) {
     newQuantity: newQty
   });
 
-  return { id, ...material, quantity: newQty, isLowStock: newQty <= 10 };
+  return { id, ...material, quantity: newQty, isLowStock: newQty <= (material.minQuantity || 100) };
 }
 
 export async function deleteMaterial(id) {
@@ -150,7 +151,6 @@ export async function uploadImage(id, file) {
     reader.onload = function(e) {
       const dataUrl = e.target.result;
       
-      // Compress image to ensure it fits safely inside Firestore's 1MB document limit
       const img = new Image();
       img.src = dataUrl;
       img.onload = async () => {
@@ -160,7 +160,7 @@ export async function uploadImage(id, file) {
           
           let width = img.width;
           let height = img.height;
-          const MAX_SIZE = 800; // Resize to max 800px
+          const MAX_SIZE = 800;
           
           if (width > height && width > MAX_SIZE) {
             height *= MAX_SIZE / width;
@@ -174,7 +174,6 @@ export async function uploadImage(id, file) {
           canvas.height = Math.max(height, 1);
           ctx.drawImage(img, 0, 0, width, height);
           
-          // Output high-compression JPEG to save database space
           const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.8);
           
           const docRef = doc(db, 'materials', id);
@@ -265,4 +264,66 @@ export async function reorderMaterials(fromIndex, toIndex) {
   await batch.commit();
   
   return materials;
+}
+
+// ============================================================
+// FLOOR PLAN
+// Slots stored as strings to avoid Firestore nested array issue:
+//   null = empty
+//   "materialId" = single material
+//   "id1|id2" = two materials (pipe-separated)
+// ============================================================
+const floorPlanDocRef = doc(db, 'config', 'floorPlan');
+
+// Parse a slot value from Firestore format
+export function parseSlot(slot) {
+  if (!slot) return [];
+  if (typeof slot === 'string' && slot.includes('|')) {
+    return slot.split('|').filter(Boolean);
+  }
+  if (typeof slot === 'string') return [slot];
+  if (Array.isArray(slot)) return slot.filter(Boolean);
+  return [];
+}
+
+// Serialize a slot value for Firestore storage
+export function serializeSlot(ids) {
+  if (!ids || ids.length === 0) return null;
+  if (ids.length === 1) return ids[0];
+  return ids.slice(0, 2).join('|');
+}
+
+export async function fetchFloorPlan() {
+  const docSnap = await getDoc(floorPlanDocRef);
+  if (docSnap.exists()) {
+    return docSnap.data();
+  }
+  // Default floor plan: 6-5-4
+  const defaultPlan = {
+    rows: [
+      { label: 'Row A', count: 6, slots: [null, null, null, null, null, null] },
+      { label: 'Row B', count: 5, slots: [null, null, null, null, null] },
+      { label: 'Row C', count: 4, slots: [null, null, null, null] },
+    ]
+  };
+  await setDoc(floorPlanDocRef, defaultPlan);
+  return defaultPlan;
+}
+
+export async function saveFloorPlan(config) {
+  // Ensure all slot values are serialized properly (no nested arrays)
+  const sanitized = {
+    rows: config.rows.map(r => ({
+      label: r.label || '',
+      count: r.count || 4,
+      slots: r.slots.map(s => {
+        if (!s) return null;
+        if (typeof s === 'string') return s;
+        if (Array.isArray(s)) return s.filter(Boolean).join('|') || null;
+        return null;
+      })
+    }))
+  };
+  await setDoc(floorPlanDocRef, sanitized);
+  return sanitized;
 }
