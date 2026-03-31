@@ -1233,7 +1233,7 @@ body {
 
 /* Increase text size and allow wrapping for full screen TV slots */
 .fp-floor-fullscreen .fp-slot-name {
-  font-size: 1.3rem; 
+  font-size: 1.15rem; 
   white-space: normal;
   text-align: center;
   line-height: 1.1;
@@ -1245,13 +1245,14 @@ body {
 }
 
 .fp-floor-fullscreen .fp-slot-code {
-  font-size: 1rem;
+  font-size: 0.85rem;
   white-space: normal;
 }
 
 .fp-floor-fullscreen .fp-slot-qty {
-  font-size: 1.5rem;
+  font-size: 1.25rem;
   margin-top: auto; /* Push quantity to the bottom */
+  margin-bottom: 8px;
 }
 
 .fp-floor-fullscreen .fp-slot-content {
