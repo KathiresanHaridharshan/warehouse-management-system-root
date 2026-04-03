@@ -7,6 +7,7 @@ import InventoryTable from './components/InventoryTable';
 import HistoryTable from './components/HistoryTable';
 import DetailModal from './components/DetailModal';
 import AdminPanel from './components/AdminPanel';
+import PlastiTrack from './components/PlastiTrack';
 import { fetchMaterials, fetchHistory } from './api/materials';
 
 export default function App() {
@@ -88,6 +89,7 @@ export default function App() {
       case 'inventory': return 'Inventory Management';
       case 'history': return 'Transaction History';
       case 'admin': return 'Admin Control Panel';
+      case 'plastitrack': return 'PlastiTrack';
       default: return '';
     }
   };
@@ -133,6 +135,8 @@ export default function App() {
             onToast={addToast}
           />
         );
+      case 'plastitrack':
+        return <PlastiTrack onToast={addToast} />;
       default:
         return null;
     }

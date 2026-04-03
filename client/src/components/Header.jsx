@@ -46,6 +46,14 @@ export default function Header({ view, onViewChange }) {
           <span className="menu-icon">⚙️</span>
           <span className="menu-tooltip">Settings</span>
         </button>
+        <button
+          className={`menu-item${view === 'plastitrack' ? ' active' : ''}`}
+          onClick={() => onViewChange('plastitrack')}
+          title="PlastiTrack"
+        >
+          <span className="menu-icon">🧪</span>
+          <span className="menu-tooltip">PlastiTrack</span>
+        </button>
       </div>
 
       <div className="sidebar-footer">
