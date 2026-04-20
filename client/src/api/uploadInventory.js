@@ -214,6 +214,16 @@ async function uploadExcelToStorage(file) {
   await uploadBytes(storageRef, file);
 }
 
+// Helper: wrap a promise with a timeout
+function withTimeout(promise, ms, label) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) =>
+      setTimeout(() => reject(new Error(`${label} timed out after ${ms / 1000}s. Check Firebase rules and network connection.`)), ms)
+    )
+  ]);
+}
+
 // ============================================================
 // 5. MAIN ORCHESTRATOR
 // ============================================================
@@ -222,8 +232,10 @@ export async function processAndUploadInventory(file, onProgress) {
     if (onProgress) onProgress({ step, message, percentage: pct });
   };
 
+  const TIMEOUT = 30000; // 30 seconds per step
+
   try {
-    // Step 1: Parse
+    // Step 1: Parse (client-side only, no timeout needed)
     progress(1, 'Parsing Excel file...', 10);
     const { materials, stats } = await parseExcelFile(file);
 
@@ -231,17 +243,22 @@ export async function processAndUploadInventory(file, onProgress) {
       throw new Error('No valid materials found in the file.');
     }
 
-    // Step 2: Upload raw file to Storage
-    progress(2, 'Uploading file to storage...', 30);
-    await uploadExcelToStorage(file);
+    // Step 2: Upload raw file to Storage (non-blocking — skip if fails)
+    progress(2, 'Uploading file to storage...', 25);
+    try {
+      await withTimeout(uploadExcelToStorage(file), TIMEOUT, 'Storage upload');
+    } catch (storageErr) {
+      console.warn('Storage upload skipped:', storageErr.message);
+      // Continue — storage is optional, Firestore data is what matters
+    }
 
     // Step 3: Clear existing data
-    progress(3, 'Clearing previous inventory data...', 50);
-    await clearInventoryCollection();
+    progress(3, 'Clearing previous inventory data...', 45);
+    await withTimeout(clearInventoryCollection(), TIMEOUT, 'Clearing inventory');
 
     // Step 4: Write new data
-    progress(4, `Writing ${stats.totalMaterials.toLocaleString()} materials to database...`, 70);
-    await uploadInventoryData(materials, file.name);
+    progress(4, `Writing ${stats.totalMaterials.toLocaleString()} materials to database...`, 65);
+    await withTimeout(uploadInventoryData(materials, file.name), TIMEOUT * 2, 'Writing inventory');
 
     // Done
     progress(5, 'Upload complete!', 100);
@@ -251,7 +268,8 @@ export async function processAndUploadInventory(file, onProgress) {
       stats
     };
   } catch (err) {
-    throw err;
+    console.error('Inventory upload failed:', err);
+    throw new Error(err.message || 'Upload failed. Please check Firebase permissions and try again.');
   }
 }
 
