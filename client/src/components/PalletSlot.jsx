@@ -30,7 +30,7 @@ export default function PalletSlot({ slotData, materials, inventoryMap = {}, onC
   // Format SAP total for a material
   const getSapTotal = (m) => {
     const inv = inventoryMap[m.itemCode];
-    if (!inv) return null;
+    if (!inv) return 'SAP: —';
     const formatted = Number(inv.total).toLocaleString('en-US', {
       minimumFractionDigits: 0,
       maximumFractionDigits: 0
@@ -60,7 +60,7 @@ export default function PalletSlot({ slotData, materials, inventoryMap = {}, onC
             <span className="fp-slot-name">{m.itemName}</span>
             <span className="fp-slot-code">{m.itemCode}</span>
             <span className={`fp-slot-qty${isLow ? ' low' : ''}`}>{m.quantity} kg</span>
-            {sapTotal && <span className="fp-slot-total">{sapTotal}</span>}
+            <span className="fp-slot-total">{sapTotal}</span>
           </div>
         </div>
         {isLow && <div className="fp-slot-low-badge">LOW</div>}
