@@ -122,36 +122,40 @@ export default function StockOverview({ materialCode }) {
     );
   }
 
-  if (!inventory || !inventory.stock || inventory.stock.length === 0) {
-    return (
-      <div className="so-container">
-        <div className="so-header">
-          <span className="so-icon">📦</span>
-          <span className="so-title">Stock Overview</span>
-        </div>
-        <div className="so-empty">
-          <span className="so-empty-icon">📋</span>
-          <span className="so-empty-text">No inventory data available.</span>
-          <span className="so-empty-sub">Please upload the latest SAP export.</span>
-        </div>
-      </div>
-    );
-  }
+  // Generate demo data for preview when no real data exists
+  const getDemoData = () => ({
+    lastUpdated: new Date(),
+    isDemo: true,
+    stock: [
+      { plant: 'B100', storageLocation: 'RM03', quantity: 12450.50, unit: 'KG' },
+      { plant: 'B100', storageLocation: 'QM01', quantity: 3200.00, unit: 'KG' },
+      { plant: 'B100', storageLocation: 'EN01', quantity: 870.25, unit: 'KG' },
+      { plant: 'B110', storageLocation: 'RM03', quantity: 5680.00, unit: 'KG' },
+      { plant: 'B110', storageLocation: 'FG01', quantity: 1240.75, unit: 'KG' },
+    ]
+  });
 
-  const plantGroups = groupByPlant(inventory.stock);
+  // Use demo data if no real data exists
+  const displayData = (inventory && inventory.stock && inventory.stock.length > 0)
+    ? inventory
+    : getDemoData();
+  const isDemo = displayData.isDemo || false;
+
+  const plantGroups = groupByPlant(displayData.stock);
   const plants = Object.keys(plantGroups).sort();
-  const grandTotal = calcGrandTotal(inventory.stock);
+  const grandTotal = calcGrandTotal(displayData.stock);
   const grandUnits = Object.keys(grandTotal);
 
   return (
-    <div className="so-container">
+    <div className={`so-container${isDemo ? ' so-demo' : ''}`}>
       <div className="so-header">
         <div className="so-header-left">
           <span className="so-icon">📦</span>
           <span className="so-title">Stock Overview</span>
+          {isDemo && <span className="so-demo-badge">SAMPLE DATA</span>}
         </div>
         <span className="so-timestamp">
-          🕐 {formatDate(inventory.lastUpdated)}
+          {isDemo ? '📋 Upload SAP export to see real data' : `🕐 ${formatDate(displayData.lastUpdated)}`}
         </span>
       </div>
 
