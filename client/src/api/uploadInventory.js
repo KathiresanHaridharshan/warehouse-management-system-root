@@ -1,18 +1,24 @@
 import * as XLSX from 'xlsx';
 import { db, storage } from '../firebase';
 import {
-  collection, doc, getDocs, getDoc, setDoc, deleteDoc, writeBatch, Timestamp
+  collection, doc, getDocs, getDoc, setDoc, deleteDoc, Timestamp
 } from 'firebase/firestore';
 import {
   ref, uploadBytes, deleteObject, getMetadata
 } from 'firebase/storage';
 
-const inventoryRef = collection(db, 'inventory');
+const INVENTORY_COLLECTION = 'inventory';
 
-// Sanitize material code for use as Firestore document ID
-// Firestore treats '/' as path separator, so replace with '__'
+// Sanitize material code for Firestore doc ID
+// Firestore can't handle '/' in doc IDs (path separator)
+// Also avoid leading/trailing dots and reserved __*__ patterns
 function sanitizeDocId(code) {
-  return code.replace(/\//g, '__');
+  let id = code.replace(/\//g, '_').replace(/\.\./g, '_');
+  // Remove leading/trailing dots
+  id = id.replace(/^\.+|\.+$/g, '');
+  // If empty after sanitizing, use a hash
+  if (!id) id = 'unknown_' + Math.random().toString(36).slice(2, 8);
+  return id;
 }
 
 // ============================================================
@@ -28,8 +34,6 @@ export function parseExcelFile(file) {
         const workbook = XLSX.read(data, { type: 'array' });
         const sheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[sheetName];
-
-        // Convert to array of arrays (each row is an array)
         const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
 
         if (rows.length < 2) {
@@ -37,23 +41,18 @@ export function parseExcelFile(file) {
           return;
         }
 
-        // Validate header row (row 0)
         const header = rows[0];
         if (!header || header.length < 7) {
           reject(new Error('Invalid file format: Expected at least 7 columns (A through G).'));
           return;
         }
 
-        // Group by material code
         const materialsMap = new Map();
         let skippedRows = 0;
 
         for (let i = 1; i < rows.length; i++) {
           const row = rows[i];
-          if (!row || row.length === 0) {
-            skippedRows++;
-            continue;
-          }
+          if (!row || row.length === 0) { skippedRows++; continue; }
 
           const materialCode = row[0] != null ? String(row[0]).trim() : '';
           const materialName = row[1] != null ? String(row[1]).trim() : '';
@@ -62,11 +61,7 @@ export function parseExcelFile(file) {
           const quantity = parseFloat(row[5]) || 0;
           const unit = row[6] != null ? String(row[6]).trim() : '';
 
-          // Skip rows with missing key fields
-          if (!materialCode || !plant || !storageLocation) {
-            skippedRows++;
-            continue;
-          }
+          if (!materialCode || !plant || !storageLocation) { skippedRows++; continue; }
 
           if (!materialsMap.has(materialCode)) {
             materialsMap.set(materialCode, {
@@ -77,33 +72,18 @@ export function parseExcelFile(file) {
           }
 
           const material = materialsMap.get(materialCode);
+          if (!material.materialName && materialName) material.materialName = materialName;
 
-          // Use first non-empty material name found
-          if (!material.materialName && materialName) {
-            material.materialName = materialName;
-          }
-
-          // Group by plant + storage location
           const stockKey = `${plant}|${storageLocation}`;
           if (!material.stockMap.has(stockKey)) {
-            material.stockMap.set(stockKey, {
-              plant,
-              storageLocation,
-              quantity: 0,
-              unit: unit || ''
-            });
+            material.stockMap.set(stockKey, { plant, storageLocation, quantity: 0, unit: unit || '' });
           }
 
           const stockEntry = material.stockMap.get(stockKey);
           stockEntry.quantity += quantity;
-
-          // Use first non-empty unit found
-          if (!stockEntry.unit && unit) {
-            stockEntry.unit = unit;
-          }
+          if (!stockEntry.unit && unit) stockEntry.unit = unit;
         }
 
-        // Convert to final format
         const parsedMaterials = [];
         const plantsSet = new Set();
 
@@ -118,7 +98,6 @@ export function parseExcelFile(file) {
             });
             plantsSet.add(entry.plant);
           });
-
           parsedMaterials.push({
             materialCode: mat.materialCode,
             materialName: mat.materialName,
@@ -146,33 +125,67 @@ export function parseExcelFile(file) {
 }
 
 // ============================================================
-// 2. TEST WRITE ACCESS (single doc test before bulk)
+// 2. PERMISSION CHECK — write to 'materials' (known working)
+//    then try 'inventory' to compare behavior
 // ============================================================
-async function testFirestoreAccess() {
-  console.log('[Inventory] Testing write access...');
-  const testRef = doc(db, 'inventory', '__write_test__');
-  await setDoc(testRef, { _test: true });
-  await deleteDoc(testRef);
-  console.log('[Inventory] ✅ Write access OK');
+async function checkPermissions() {
+  // Test 1: Write to 'materials' collection (known to work)
+  console.log('[INV] Testing write to materials collection...');
+  const matTestRef = doc(db, 'materials', 'zz_permission_test');
+  const matTimeout = raceTimeout(setDoc(matTestRef, { _test: true }), 8000);
+  
+  try {
+    await matTimeout;
+    await deleteDoc(matTestRef);
+    console.log('[INV] ✅ materials collection write OK');
+  } catch (err) {
+    console.error('[INV] ❌ Even materials collection failed:', err.message);
+    throw new Error('Firestore connection issue. Check your network and Firebase project.');
+  }
+
+  // Test 2: Write to 'inventory' collection
+  console.log('[INV] Testing write to inventory collection...');
+  const invTestRef = doc(db, INVENTORY_COLLECTION, 'zz_permission_test');
+  const invTimeout = raceTimeout(setDoc(invTestRef, { _test: true }), 8000);
+  
+  try {
+    await invTimeout;
+    await deleteDoc(invTestRef);
+    console.log('[INV] ✅ inventory collection write OK');
+  } catch (err) {
+    console.error('[INV] ❌ inventory collection BLOCKED:', err.message);
+    throw new Error(
+      'Cannot write to "inventory" collection but CAN write to "materials". ' +
+      'Your Firestore rules are missing the inventory collection. ' +
+      'Set rules to: match /{document=**} { allow read, write: if true; }'
+    );
+  }
+}
+
+function raceTimeout(promise, ms) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error('Timed out')), ms))
+  ]);
 }
 
 // ============================================================
 // 3. DELETE ALL EXISTING INVENTORY DOCUMENTS
 // ============================================================
-async function clearInventoryCollection(onProgress) {
-  console.log('[Inventory] Reading existing docs...');
+async function clearInventory(onProgress) {
+  const inventoryRef = collection(db, INVENTORY_COLLECTION);
+  console.log('[INV] Reading existing inventory docs...');
   const snapshot = await getDocs(inventoryRef);
 
   if (snapshot.empty) {
-    console.log('[Inventory] Collection empty.');
+    console.log('[INV] Collection empty, nothing to clear.');
     return 0;
   }
 
   const docs = snapshot.docs;
-  console.log(`[Inventory] Deleting ${docs.length} docs...`);
+  console.log(`[INV] Deleting ${docs.length} docs...`);
   let deleted = 0;
 
-  // Delete 10 at a time in parallel
   for (let i = 0; i < docs.length; i += 10) {
     const group = docs.slice(i, i + 10);
     await Promise.all(group.map(d => deleteDoc(d.ref)));
@@ -180,23 +193,22 @@ async function clearInventoryCollection(onProgress) {
     if (onProgress) onProgress(deleted, docs.length);
   }
 
-  console.log(`[Inventory] Deleted ${deleted} docs.`);
+  console.log(`[INV] Deleted ${deleted} docs.`);
   return deleted;
 }
 
 // ============================================================
-// 4. WRITE INVENTORY DATA (individual setDoc, not batch)
+// 4. WRITE INVENTORY DATA (individual setDoc calls)
 // ============================================================
-async function uploadInventoryData(materials, fileName, onProgress) {
+async function writeInventory(materials, fileName, onProgress) {
   const now = Timestamp.now();
   let written = 0;
 
-  // Write 10 docs in parallel at a time
   for (let i = 0; i < materials.length; i += 10) {
     const group = materials.slice(i, i + 10);
     await Promise.all(group.map(mat => {
       const docId = sanitizeDocId(mat.materialCode);
-      return setDoc(doc(db, 'inventory', docId), {
+      return setDoc(doc(db, INVENTORY_COLLECTION, docId), {
         materialCode: mat.materialCode,
         materialName: mat.materialName,
         lastUpdated: now,
@@ -206,10 +218,11 @@ async function uploadInventoryData(materials, fileName, onProgress) {
     }));
     written += group.length;
     if (onProgress) onProgress(written, materials.length);
-    if (written % 50 === 0) console.log(`[Inventory] Written ${written}/${materials.length}`);
+    if (written % 100 === 0 || written === materials.length) {
+      console.log(`[INV] Written ${written}/${materials.length}`);
+    }
   }
 
-  console.log(`[Inventory] ✅ Written ${written} docs.`);
   return written;
 }
 
@@ -224,56 +237,50 @@ export async function processAndUploadInventory(file, onProgress) {
   try {
     // Step 1: Parse
     progress(1, 'Parsing Excel file...', 10);
+    console.log('[INV] === STEP 1: Parsing ===');
     const { materials, stats } = await parseExcelFile(file);
-    console.log(`[Inventory] Parsed: ${stats.totalMaterials} materials, ${stats.totalPlants} plants`);
+    console.log(`[INV] Parsed ${stats.totalMaterials} materials from ${stats.totalRows} rows`);
 
     if (materials.length === 0) {
       throw new Error('No valid materials found in the file.');
     }
 
-    // Step 2: Test permissions
-    progress(2, 'Checking permissions...', 20);
-    try {
-      await testFirestoreAccess();
-    } catch (err) {
-      throw new Error(
-        'Cannot write to Firestore. Go to Firebase Console → Firestore → Rules and add:\n' +
-        'match /inventory/{doc=**} { allow read, write: if true; }\n\n' +
-        'Error: ' + err.message
-      );
-    }
+    // Step 2: Check permissions
+    progress(2, 'Checking Firestore access...', 20);
+    console.log('[INV] === STEP 2: Permission check ===');
+    await checkPermissions();
 
-    // Optional: Storage upload (skip fast if not available)
+    // Optional: Storage upload
     try {
       const storageRef = ref(storage, 'sap-exports/latest.xlsx');
-      await Promise.race([
-        uploadBytes(storageRef, file),
-        new Promise((_, rej) => setTimeout(() => rej(new Error('skip')), 5000))
-      ]);
+      await raceTimeout(uploadBytes(storageRef, file), 5000);
+      console.log('[INV] Storage upload done');
     } catch {
-      console.warn('[Inventory] Storage skipped');
+      console.warn('[INV] Storage skipped (not activated or timed out)');
     }
 
     // Step 3: Clear old data
     progress(3, 'Clearing old data...', 30);
-    await clearInventoryCollection((done, total) => {
+    console.log('[INV] === STEP 3: Clearing ===');
+    await clearInventory((done, total) => {
       progress(3, `Clearing... ${done}/${total}`, 30 + Math.round((done / total) * 15));
     });
 
     // Step 4: Write new data
     progress(4, `Writing 0/${stats.totalMaterials.toLocaleString()}...`, 50);
-    await uploadInventoryData(materials, file.name, (done, total) => {
+    console.log('[INV] === STEP 4: Writing ===');
+    await writeInventory(materials, file.name, (done, total) => {
       const pct = 50 + Math.round((done / total) * 45);
       progress(4, `Writing... ${done.toLocaleString()}/${total.toLocaleString()}`, Math.min(pct, 95));
     });
 
     // Done!
     progress(5, 'Upload complete!', 100);
-    console.log('[Inventory] ✅ ALL DONE', stats);
+    console.log('[INV] ✅ ALL DONE!', stats);
     return { success: true, stats };
 
   } catch (err) {
-    console.error('[Inventory] ❌ FAILED:', err);
+    console.error('[INV] ❌ FAILED:', err);
     throw new Error(err.message || 'Upload failed.');
   }
 }
@@ -285,10 +292,10 @@ export async function fetchInventoryForMaterial(materialCode) {
   if (!materialCode) return null;
 
   const trimmedCode = materialCode.trim();
-  const docRef = doc(db, 'inventory', sanitizeDocId(trimmedCode));
+  const docId = sanitizeDocId(trimmedCode);
+  const docRef = doc(db, INVENTORY_COLLECTION, docId);
   const docSnap = await getDoc(docRef);
 
   if (!docSnap.exists()) return null;
-
   return { id: docSnap.id, ...docSnap.data() };
 }
