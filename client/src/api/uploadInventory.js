@@ -243,10 +243,10 @@ export async function processAndUploadInventory(file, onProgress) {
       throw new Error('No valid materials found in the file.');
     }
 
-    // Step 2: Upload raw file to Storage (non-blocking — skip if fails)
+    // Step 2: Upload raw file to Storage (optional — skips fast if Storage not activated)
     progress(2, 'Uploading file to storage...', 25);
     try {
-      await withTimeout(uploadExcelToStorage(file), TIMEOUT, 'Storage upload');
+      await withTimeout(uploadExcelToStorage(file), 5000, 'Storage upload');
     } catch (storageErr) {
       console.warn('Storage upload skipped:', storageErr.message);
       // Continue — storage is optional, Firestore data is what matters
