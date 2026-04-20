@@ -10,6 +10,12 @@ import {
 const inventoryRef = collection(db, 'inventory');
 const BATCH_LIMIT = 500;
 
+// Sanitize material code for use as Firestore document ID
+// Firestore treats '/' as path separator, so replace with '__'
+function sanitizeDocId(code) {
+  return code.replace(/\//g, '__');
+}
+
 // ============================================================
 // 1. PARSE THE EXCEL FILE
 // ============================================================
@@ -180,7 +186,7 @@ async function uploadInventoryData(parsedMaterials, fileName) {
     const chunk = parsedMaterials.slice(i, i + BATCH_LIMIT);
 
     chunk.forEach((mat) => {
-      const docRef = doc(db, 'inventory', mat.materialCode);
+      const docRef = doc(db, 'inventory', sanitizeDocId(mat.materialCode));
       batch.set(docRef, {
         materialCode: mat.materialCode,
         materialName: mat.materialName,
@@ -280,7 +286,7 @@ export async function fetchInventoryForMaterial(materialCode) {
   if (!materialCode) return null;
 
   const trimmedCode = materialCode.trim();
-  const docRef = doc(db, 'inventory', trimmedCode);
+  const docRef = doc(db, 'inventory', sanitizeDocId(trimmedCode));
   const docSnap = await getDoc(docRef);
 
   if (!docSnap.exists()) return null;
