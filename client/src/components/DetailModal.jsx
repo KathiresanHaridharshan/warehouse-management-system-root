@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { adjustQuantity } from '../api/materials';
+import StockOverview from './StockOverview';
 
 export default function DetailModal({ material, onClose, onUpdated }) {
   const [delta, setDelta] = useState(0);
@@ -129,6 +130,11 @@ export default function DetailModal({ material, onClose, onUpdated }) {
 
             {error && <div className="dm-error">{error}</div>}
           </div>
+        </div>
+
+        {/* Stock Overview Section */}
+        <div className="detail-modal-stock-section">
+          <StockOverview materialCode={material.itemCode} />
         </div>
 
         <div className="detail-modal-footer">

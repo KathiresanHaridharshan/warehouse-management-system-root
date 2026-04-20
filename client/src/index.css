@@ -2562,6 +2562,602 @@ body {
 }
 
 /* ============================================================
+   DETAIL MODAL — Stock Section (below body)
+   ============================================================ */
+.detail-modal-card {
+  max-width: 780px;
+}
+
+.detail-modal-stock-section {
+  padding: 0 24px 20px;
+  overflow-y: auto;
+}
+
+/* ============================================================
+   STOCK OVERVIEW COMPONENT
+   ============================================================ */
+.so-container {
+  background: var(--gray-50);
+  border: 1px solid var(--gray-200);
+  border-radius: var(--r-lg);
+  overflow: hidden;
+}
+
+.so-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--gray-200);
+  background: var(--white);
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.so-header-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.so-icon {
+  font-size: 1.1rem;
+}
+
+.so-title {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--gray-800);
+  letter-spacing: -0.2px;
+}
+
+.so-timestamp {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--gray-400);
+  background: var(--gray-50);
+  padding: 4px 10px;
+  border-radius: var(--r-full);
+  border: 1px solid var(--gray-200);
+  white-space: nowrap;
+}
+
+/* Loading */
+.so-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 32px 16px;
+  color: var(--gray-400);
+  font-size: 0.82rem;
+  font-weight: 500;
+}
+
+.so-spinner {
+  width: 20px;
+  height: 20px;
+  border-width: 2px;
+}
+
+/* Empty State */
+.so-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 28px 16px;
+  text-align: center;
+}
+
+.so-empty-icon {
+  font-size: 1.6rem;
+  opacity: 0.4;
+}
+
+.so-empty-text {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--gray-600);
+}
+
+.so-empty-sub {
+  font-size: 0.72rem;
+  color: var(--gray-400);
+}
+
+/* Error */
+.so-error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 20px 16px;
+  color: var(--danger);
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.so-error-icon {
+  font-size: 1rem;
+}
+
+/* Plant Cards */
+.so-plants {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  background: var(--gray-200);
+}
+
+.so-plant-card {
+  background: var(--white);
+  padding: 14px 18px;
+}
+
+.so-plant-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.so-plant-icon {
+  font-size: 0.85rem;
+}
+
+.so-plant-name {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--gray-700);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+/* Storage Location Rows */
+.so-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.so-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 0 4px;
+}
+
+.so-row-loc {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--gray-600);
+  min-width: 52px;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+}
+
+.so-row-dots {
+  flex: 1;
+  border-bottom: 1px dotted var(--gray-300);
+  margin-bottom: 3px;
+  min-width: 20px;
+}
+
+.so-row-qty {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--gray-800);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  min-width: 80px;
+}
+
+.so-row-unit {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--gray-400);
+  min-width: 28px;
+  text-transform: uppercase;
+}
+
+/* Plant Total */
+.so-plant-total {
+  border-top: 1px solid var(--gray-200);
+  padding-top: 8px;
+}
+
+.so-total-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 0 4px;
+}
+
+.so-total-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--gray-700);
+}
+
+.so-total-dots {
+  flex: 1;
+  border-bottom: 1px dotted var(--gray-300);
+  margin-bottom: 3px;
+  min-width: 20px;
+}
+
+.so-total-qty {
+  font-size: 0.85rem;
+  font-weight: 800;
+  color: var(--gray-900);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  min-width: 80px;
+}
+
+.so-total-unit {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--gray-500);
+  min-width: 28px;
+  text-transform: uppercase;
+}
+
+/* Grand Total */
+.so-grand-total {
+  background: var(--gray-800);
+  padding: 12px 18px;
+}
+
+.so-grand-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.so-grand-label {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: rgba(255,255,255,0.7);
+}
+
+.so-grand-dots {
+  flex: 1;
+  border-bottom: 1px dotted rgba(255,255,255,0.2);
+  margin-bottom: 3px;
+  min-width: 20px;
+}
+
+.so-grand-qty {
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: var(--white);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  min-width: 80px;
+}
+
+.so-grand-unit {
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: rgba(255,255,255,0.6);
+  min-width: 28px;
+  text-transform: uppercase;
+}
+
+/* ============================================================
+   INVENTORY UPLOAD COMPONENT
+   ============================================================ */
+.iu-container {
+  overflow: hidden;
+}
+
+.iu-body {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* Drop Zone */
+.iu-dropzone {
+  border: 2px dashed var(--gray-300);
+  border-radius: var(--r-md);
+  padding: 28px 20px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-align: center;
+  background: var(--gray-50);
+}
+
+.iu-dropzone:hover {
+  border-color: var(--red);
+  background: var(--red-light);
+}
+
+.iu-dropzone.iu-dragover {
+  border-color: var(--red);
+  background: var(--red-light);
+  box-shadow: 0 0 0 4px var(--red-glow);
+  transform: scale(1.01);
+}
+
+.iu-dropzone.iu-has-file {
+  border-style: solid;
+  border-color: var(--success);
+  background: var(--success-light);
+  padding: 14px 16px;
+}
+
+.iu-drop-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.iu-drop-icon {
+  font-size: 2rem;
+  opacity: 0.8;
+}
+
+.iu-drop-text {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--gray-600);
+}
+
+.iu-drop-sub {
+  font-size: 0.72rem;
+  color: var(--gray-400);
+}
+
+/* File Info Chip */
+.iu-file-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.iu-file-icon {
+  font-size: 1.5rem;
+}
+
+.iu-file-details {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  text-align: left;
+}
+
+.iu-file-name {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--gray-800);
+  word-break: break-all;
+}
+
+.iu-file-size {
+  font-size: 0.7rem;
+  color: var(--gray-500);
+  font-weight: 500;
+}
+
+.iu-file-remove {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid var(--gray-200);
+  background: var(--white);
+  color: var(--gray-500);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  transition: all var(--ease);
+  flex-shrink: 0;
+}
+
+.iu-file-remove:hover {
+  background: var(--danger-light);
+  border-color: var(--danger);
+  color: var(--danger);
+}
+
+/* Progress */
+.iu-progress-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 8px 0;
+}
+
+.iu-progress-steps {
+  display: flex;
+  justify-content: space-between;
+  gap: 4px;
+}
+
+.iu-step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+}
+
+.iu-step-dot {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--gray-200);
+  color: var(--gray-400);
+  font-size: 0.65rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+}
+
+.iu-step-active .iu-step-dot {
+  background: var(--red);
+  color: var(--white);
+  box-shadow: 0 2px 8px rgba(228, 36, 44, 0.35);
+  animation: pulse-dot 1.5s infinite;
+}
+
+.iu-step-done .iu-step-dot {
+  background: var(--success);
+  color: var(--white);
+}
+
+@keyframes pulse-dot {
+  0%, 100% { box-shadow: 0 2px 8px rgba(228, 36, 44, 0.35); }
+  50% { box-shadow: 0 2px 16px rgba(228, 36, 44, 0.55); }
+}
+
+.iu-step-label {
+  font-size: 0.62rem;
+  font-weight: 600;
+  color: var(--gray-400);
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.iu-step-active .iu-step-label {
+  color: var(--red);
+}
+
+.iu-step-done .iu-step-label {
+  color: var(--success);
+}
+
+/* Progress Bar */
+.iu-progress-bar-track {
+  height: 6px;
+  background: var(--gray-200);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.iu-progress-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--red), #f06);
+  border-radius: 3px;
+  transition: width 0.4s ease;
+}
+
+.iu-progress-message {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--gray-600);
+}
+
+.iu-mini-spinner {
+  width: 16px;
+  height: 16px;
+  border-width: 2px;
+}
+
+/* Result */
+.iu-result {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  background: var(--success-light);
+  border: 1px solid var(--success);
+  border-radius: var(--r-md);
+}
+
+.iu-result-icon {
+  font-size: 2rem;
+}
+
+.iu-result-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--gray-800);
+}
+
+.iu-result-stats {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.iu-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  background: var(--white);
+  padding: 10px 18px;
+  border-radius: var(--r-md);
+  border: 1px solid var(--gray-200);
+  min-width: 80px;
+}
+
+.iu-stat-value {
+  font-size: 1.3rem;
+  font-weight: 800;
+  color: var(--gray-900);
+}
+
+.iu-stat-label {
+  font-size: 0.65rem;
+  font-weight: 600;
+  color: var(--gray-400);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.iu-stat-warn .iu-stat-value {
+  color: var(--warning);
+}
+
+/* Error */
+.iu-error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  background: var(--danger-light);
+  border: 1px solid var(--danger);
+  border-radius: var(--r-md);
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--danger);
+}
+
+.iu-error-icon {
+  font-size: 1rem;
+  flex-shrink: 0;
+}
+
+/* Actions */
+.iu-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.iu-actions .btn {
+  flex: 0;
+  white-space: nowrap;
+}
+
+/* ============================================================
    RESPONSIVE
    ============================================================ */
 @media (max-width: 768px) {

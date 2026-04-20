@@ -1,5 +1,6 @@
 import { useState, useRef } from 'react';
 import { createMaterial, deleteMaterial, exportData, importData, reorderMaterials, uploadImage, updateMaterial } from '../api/materials';
+import InventoryUpload from './InventoryUpload';
 
 export default function AdminPanel({ materials, onRefresh, onToast }) {
   const [isAdding, setIsAdding] = useState(false);
@@ -144,6 +145,8 @@ export default function AdminPanel({ materials, onRefresh, onToast }) {
           </button>
         </div>
       </header>
+
+      <InventoryUpload onToast={onToast} />
 
       {isAdding && (
         <div className="admin-card form-card">
