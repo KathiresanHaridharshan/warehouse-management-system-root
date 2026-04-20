@@ -8,7 +8,6 @@ import {
 } from 'firebase/storage';
 
 const inventoryRef = collection(db, 'inventory');
-const BATCH_LIMIT = 500;
 
 // Sanitize material code for use as Firestore document ID
 // Firestore treats '/' as path separator, so replace with '__'
@@ -147,101 +146,71 @@ export function parseExcelFile(file) {
 }
 
 // ============================================================
-// 2. DELETE ALL EXISTING INVENTORY DOCUMENTS
+// 2. TEST WRITE ACCESS (single doc test before bulk)
 // ============================================================
-async function clearInventoryCollection(onBatchDone) {
+async function testFirestoreAccess() {
+  console.log('[Inventory] Testing write access...');
+  const testRef = doc(db, 'inventory', '__write_test__');
+  await setDoc(testRef, { _test: true });
+  await deleteDoc(testRef);
+  console.log('[Inventory] ✅ Write access OK');
+}
+
+// ============================================================
+// 3. DELETE ALL EXISTING INVENTORY DOCUMENTS
+// ============================================================
+async function clearInventoryCollection(onProgress) {
+  console.log('[Inventory] Reading existing docs...');
   const snapshot = await getDocs(inventoryRef);
 
-  if (snapshot.empty) return 0;
+  if (snapshot.empty) {
+    console.log('[Inventory] Collection empty.');
+    return 0;
+  }
 
   const docs = snapshot.docs;
-  let deletedCount = 0;
-  const CONCURRENT = 5; // Run 5 batch deletes in parallel
+  console.log(`[Inventory] Deleting ${docs.length} docs...`);
+  let deleted = 0;
 
-  // Create all batch chunks
-  const chunks = [];
-  for (let i = 0; i < docs.length; i += BATCH_LIMIT) {
-    chunks.push(docs.slice(i, i + BATCH_LIMIT));
+  // Delete 10 at a time in parallel
+  for (let i = 0; i < docs.length; i += 10) {
+    const group = docs.slice(i, i + 10);
+    await Promise.all(group.map(d => deleteDoc(d.ref)));
+    deleted += group.length;
+    if (onProgress) onProgress(deleted, docs.length);
   }
 
-  // Process chunks in parallel groups
-  for (let i = 0; i < chunks.length; i += CONCURRENT) {
-    const group = chunks.slice(i, i + CONCURRENT);
-    await Promise.all(group.map(async (chunk) => {
-      const batch = writeBatch(db);
-      chunk.forEach((docSnap) => batch.delete(docSnap.ref));
-      await batch.commit();
-      deletedCount += chunk.length;
-      if (onBatchDone) onBatchDone(deletedCount, docs.length);
-    }));
-  }
-
-  return deletedCount;
+  console.log(`[Inventory] Deleted ${deleted} docs.`);
+  return deleted;
 }
 
 // ============================================================
-// 3. UPLOAD PARSED DATA TO FIRESTORE
+// 4. WRITE INVENTORY DATA (individual setDoc, not batch)
 // ============================================================
-async function uploadInventoryData(parsedMaterials, fileName, onBatchDone) {
+async function uploadInventoryData(materials, fileName, onProgress) {
   const now = Timestamp.now();
-  let writtenCount = 0;
-  const CONCURRENT = 5; // Run 5 batch writes in parallel
+  let written = 0;
 
-  // Create all batch chunks
-  const chunks = [];
-  for (let i = 0; i < parsedMaterials.length; i += BATCH_LIMIT) {
-    chunks.push(parsedMaterials.slice(i, i + BATCH_LIMIT));
-  }
-
-  // Process chunks in parallel groups
-  for (let i = 0; i < chunks.length; i += CONCURRENT) {
-    const group = chunks.slice(i, i + CONCURRENT);
-    await Promise.all(group.map(async (chunk) => {
-      const batch = writeBatch(db);
-      chunk.forEach((mat) => {
-        const docRef = doc(db, 'inventory', sanitizeDocId(mat.materialCode));
-        batch.set(docRef, {
-          materialCode: mat.materialCode,
-          materialName: mat.materialName,
-          lastUpdated: now,
-          uploadedFileName: fileName,
-          stock: mat.stock
-        });
+  // Write 10 docs in parallel at a time
+  for (let i = 0; i < materials.length; i += 10) {
+    const group = materials.slice(i, i + 10);
+    await Promise.all(group.map(mat => {
+      const docId = sanitizeDocId(mat.materialCode);
+      return setDoc(doc(db, 'inventory', docId), {
+        materialCode: mat.materialCode,
+        materialName: mat.materialName,
+        lastUpdated: now,
+        uploadedFileName: fileName,
+        stock: mat.stock
       });
-      await batch.commit();
-      writtenCount += chunk.length;
-      if (onBatchDone) onBatchDone(writtenCount, parsedMaterials.length);
     }));
+    written += group.length;
+    if (onProgress) onProgress(written, materials.length);
+    if (written % 50 === 0) console.log(`[Inventory] Written ${written}/${materials.length}`);
   }
 
-  return writtenCount;
-}
-
-// ============================================================
-// 4. UPLOAD RAW EXCEL TO FIREBASE STORAGE
-// ============================================================
-async function uploadExcelToStorage(file) {
-  const storageRef = ref(storage, 'sap-exports/latest.xlsx');
-
-  // Try to delete existing file first
-  try {
-    await getMetadata(storageRef);
-    await deleteObject(storageRef);
-  } catch {
-    // File doesn't exist — that's fine
-  }
-
-  await uploadBytes(storageRef, file);
-}
-
-// Helper: wrap a promise with a timeout
-function withTimeout(promise, ms, label) {
-  return Promise.race([
-    promise,
-    new Promise((_, reject) =>
-      setTimeout(() => reject(new Error(`${label} timed out after ${ms / 1000}s. Check Firebase rules and network connection.`)), ms)
-    )
-  ]);
+  console.log(`[Inventory] ✅ Written ${written} docs.`);
+  return written;
 }
 
 // ============================================================
@@ -253,46 +222,59 @@ export async function processAndUploadInventory(file, onProgress) {
   };
 
   try {
-    // Step 1: Parse (client-side only)
+    // Step 1: Parse
     progress(1, 'Parsing Excel file...', 10);
     const { materials, stats } = await parseExcelFile(file);
+    console.log(`[Inventory] Parsed: ${stats.totalMaterials} materials, ${stats.totalPlants} plants`);
 
     if (materials.length === 0) {
       throw new Error('No valid materials found in the file.');
     }
 
-    // Step 2: Upload raw file to Storage (optional — skips fast if Storage not activated)
-    progress(2, 'Uploading file to storage...', 20);
+    // Step 2: Test permissions
+    progress(2, 'Checking permissions...', 20);
     try {
-      await withTimeout(uploadExcelToStorage(file), 5000, 'Storage upload');
-    } catch (storageErr) {
-      console.warn('Storage upload skipped:', storageErr.message);
+      await testFirestoreAccess();
+    } catch (err) {
+      throw new Error(
+        'Cannot write to Firestore. Go to Firebase Console → Firestore → Rules and add:\n' +
+        'match /inventory/{doc=**} { allow read, write: if true; }\n\n' +
+        'Error: ' + err.message
+      );
     }
 
-    // Step 3: Clear existing data (no timeout — let it finish)
-    progress(3, 'Clearing previous inventory data...', 30);
-    await clearInventoryCollection((deleted, total) => {
-      const pct = 30 + Math.round((deleted / total) * 20);
-      progress(3, `Clearing old data... ${deleted.toLocaleString()}/${total.toLocaleString()}`, pct);
+    // Optional: Storage upload (skip fast if not available)
+    try {
+      const storageRef = ref(storage, 'sap-exports/latest.xlsx');
+      await Promise.race([
+        uploadBytes(storageRef, file),
+        new Promise((_, rej) => setTimeout(() => rej(new Error('skip')), 5000))
+      ]);
+    } catch {
+      console.warn('[Inventory] Storage skipped');
+    }
+
+    // Step 3: Clear old data
+    progress(3, 'Clearing old data...', 30);
+    await clearInventoryCollection((done, total) => {
+      progress(3, `Clearing... ${done}/${total}`, 30 + Math.round((done / total) * 15));
     });
 
-    // Step 4: Write new data (no timeout — with live progress)
-    progress(4, `Writing ${stats.totalMaterials.toLocaleString()} materials...`, 50);
-    await uploadInventoryData(materials, file.name, (written, total) => {
-      const pct = 50 + Math.round((written / total) * 45);
-      progress(4, `Writing materials... ${written.toLocaleString()}/${total.toLocaleString()}`, Math.min(pct, 95));
+    // Step 4: Write new data
+    progress(4, `Writing 0/${stats.totalMaterials.toLocaleString()}...`, 50);
+    await uploadInventoryData(materials, file.name, (done, total) => {
+      const pct = 50 + Math.round((done / total) * 45);
+      progress(4, `Writing... ${done.toLocaleString()}/${total.toLocaleString()}`, Math.min(pct, 95));
     });
 
-    // Done
+    // Done!
     progress(5, 'Upload complete!', 100);
+    console.log('[Inventory] ✅ ALL DONE', stats);
+    return { success: true, stats };
 
-    return {
-      success: true,
-      stats
-    };
   } catch (err) {
-    console.error('Inventory upload failed:', err);
-    throw new Error(err.message || 'Upload failed. Please check Firebase permissions and try again.');
+    console.error('[Inventory] ❌ FAILED:', err);
+    throw new Error(err.message || 'Upload failed.');
   }
 }
 
