@@ -48,6 +48,7 @@ export default function PalletSlot({ slotData, materials, onClick, rowIndex, slo
             <span className="fp-slot-name">{m.itemName}</span>
             <span className="fp-slot-code">{m.itemCode}</span>
             <span className={`fp-slot-qty${isLow ? ' low' : ''}`}>{m.quantity} kg</span>
+            <span className="fp-slot-total">Total: {m.totalStock != null ? m.totalStock : m.quantity} items</span>
           </div>
         </div>
         {isLow && <div className="fp-slot-low-badge">LOW</div>}
