@@ -1,13 +1,15 @@
 import { useState, useEffect, useCallback } from 'react';
 import PalletSlot from './PalletSlot';
 import FloorPlanEditor from './FloorPlanEditor';
-import { fetchFloorPlan, saveFloorPlan } from '../api/materials';
+import { fetchFloorPlan, saveFloorPlan, parseSlot } from '../api/materials';
+import { fetchInventoryForMaterial } from '../api/uploadInventory';
 
 export default function FloorPlanView({ materials, onCardClick, onToast }) {
   const [config, setConfig] = useState(null);
   const [editing, setEditing] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [inventoryMap, setInventoryMap] = useState({});
 
   const loadConfig = useCallback(async () => {
     try {
@@ -21,6 +23,42 @@ export default function FloorPlanView({ materials, onCardClick, onToast }) {
   }, [onToast]);
 
   useEffect(() => { loadConfig(); }, [loadConfig]);
+
+  // Fetch SAP inventory for all assigned materials
+  useEffect(() => {
+    if (!config || !materials.length) return;
+
+    const assignedCodes = new Set();
+    config.rows.forEach(row => {
+      row.slots.forEach(slot => {
+        const ids = parseSlot(slot);
+        ids.forEach(id => {
+          const m = materials.find(mat => mat.id === id);
+          if (m) assignedCodes.add(m.itemCode);
+        });
+      });
+    });
+
+    if (assignedCodes.size === 0) return;
+
+    const fetchAll = async () => {
+      const map = {};
+      for (const code of assignedCodes) {
+        try {
+          const inv = await fetchInventoryForMaterial(code);
+          if (inv && inv.stock) {
+            const total = inv.stock.reduce((sum, s) => sum + (s.quantity || 0), 0);
+            const unit = inv.stock[0]?.unit || 'KG';
+            map[code] = { total, unit };
+          }
+        } catch {
+          // Skip — quota exhausted or no data
+        }
+      }
+      setInventoryMap(map);
+    };
+    fetchAll();
+  }, [config, materials]);
 
   useEffect(() => {
     const handleKey = (e) => {
@@ -83,6 +121,7 @@ export default function FloorPlanView({ materials, onCardClick, onToast }) {
                 key={slotIdx}
                 slotData={slot}
                 materials={materials}
+                inventoryMap={inventoryMap}
                 onClick={onCardClick}
                 rowIndex={rowIdx}
                 slotIndex={slotIdx}

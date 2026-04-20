@@ -1,6 +1,6 @@
 import { parseSlot } from '../api/materials';
 
-export default function PalletSlot({ slotData, materials, onClick, rowIndex, slotIndex, isFullscreen }) {
+export default function PalletSlot({ slotData, materials, inventoryMap = {}, onClick, rowIndex, slotIndex, isFullscreen }) {
   const ids = parseSlot(slotData);
 
   if (ids.length === 0) {
@@ -27,9 +27,21 @@ export default function PalletSlot({ slotData, materials, onClick, rowIndex, slo
     );
   }
 
+  // Format SAP total for a material
+  const getSapTotal = (m) => {
+    const inv = inventoryMap[m.itemCode];
+    if (!inv) return null;
+    const formatted = Number(inv.total).toLocaleString('en-US', {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
+    });
+    return `SAP: ${formatted} ${inv.unit}`;
+  };
+
   if (mats.length === 1) {
     const m = mats[0];
     const isLow = m.isLowStock;
+    const sapTotal = getSapTotal(m);
     return (
       <div
         className={`fp-slot fp-slot-filled${isLow ? ' fp-slot-low' : ''}${isFullscreen ? ' fp-slot-clickable' : ''}`}
@@ -48,7 +60,7 @@ export default function PalletSlot({ slotData, materials, onClick, rowIndex, slo
             <span className="fp-slot-name">{m.itemName}</span>
             <span className="fp-slot-code">{m.itemCode}</span>
             <span className={`fp-slot-qty${isLow ? ' low' : ''}`}>{m.quantity} kg</span>
-            <span className="fp-slot-total">Total: {m.totalStock != null ? m.totalStock : m.quantity} items</span>
+            {sapTotal && <span className="fp-slot-total">{sapTotal}</span>}
           </div>
         </div>
         {isLow && <div className="fp-slot-low-badge">LOW</div>}
