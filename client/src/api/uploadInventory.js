@@ -149,25 +149,31 @@ export function parseExcelFile(file) {
 // ============================================================
 // 2. DELETE ALL EXISTING INVENTORY DOCUMENTS
 // ============================================================
-async function clearInventoryCollection() {
+async function clearInventoryCollection(onBatchDone) {
   const snapshot = await getDocs(inventoryRef);
 
   if (snapshot.empty) return 0;
 
   const docs = snapshot.docs;
   let deletedCount = 0;
+  const CONCURRENT = 5; // Run 5 batch deletes in parallel
 
-  // Batch delete in chunks of BATCH_LIMIT
+  // Create all batch chunks
+  const chunks = [];
   for (let i = 0; i < docs.length; i += BATCH_LIMIT) {
-    const batch = writeBatch(db);
-    const chunk = docs.slice(i, i + BATCH_LIMIT);
+    chunks.push(docs.slice(i, i + BATCH_LIMIT));
+  }
 
-    chunk.forEach((docSnap) => {
-      batch.delete(docSnap.ref);
-    });
-
-    await batch.commit();
-    deletedCount += chunk.length;
+  // Process chunks in parallel groups
+  for (let i = 0; i < chunks.length; i += CONCURRENT) {
+    const group = chunks.slice(i, i + CONCURRENT);
+    await Promise.all(group.map(async (chunk) => {
+      const batch = writeBatch(db);
+      chunk.forEach((docSnap) => batch.delete(docSnap.ref));
+      await batch.commit();
+      deletedCount += chunk.length;
+      if (onBatchDone) onBatchDone(deletedCount, docs.length);
+    }));
   }
 
   return deletedCount;
@@ -176,28 +182,36 @@ async function clearInventoryCollection() {
 // ============================================================
 // 3. UPLOAD PARSED DATA TO FIRESTORE
 // ============================================================
-async function uploadInventoryData(parsedMaterials, fileName) {
+async function uploadInventoryData(parsedMaterials, fileName, onBatchDone) {
   const now = Timestamp.now();
   let writtenCount = 0;
+  const CONCURRENT = 5; // Run 5 batch writes in parallel
 
-  // Batch write in chunks of BATCH_LIMIT
+  // Create all batch chunks
+  const chunks = [];
   for (let i = 0; i < parsedMaterials.length; i += BATCH_LIMIT) {
-    const batch = writeBatch(db);
-    const chunk = parsedMaterials.slice(i, i + BATCH_LIMIT);
+    chunks.push(parsedMaterials.slice(i, i + BATCH_LIMIT));
+  }
 
-    chunk.forEach((mat) => {
-      const docRef = doc(db, 'inventory', sanitizeDocId(mat.materialCode));
-      batch.set(docRef, {
-        materialCode: mat.materialCode,
-        materialName: mat.materialName,
-        lastUpdated: now,
-        uploadedFileName: fileName,
-        stock: mat.stock
+  // Process chunks in parallel groups
+  for (let i = 0; i < chunks.length; i += CONCURRENT) {
+    const group = chunks.slice(i, i + CONCURRENT);
+    await Promise.all(group.map(async (chunk) => {
+      const batch = writeBatch(db);
+      chunk.forEach((mat) => {
+        const docRef = doc(db, 'inventory', sanitizeDocId(mat.materialCode));
+        batch.set(docRef, {
+          materialCode: mat.materialCode,
+          materialName: mat.materialName,
+          lastUpdated: now,
+          uploadedFileName: fileName,
+          stock: mat.stock
+        });
       });
-    });
-
-    await batch.commit();
-    writtenCount += chunk.length;
+      await batch.commit();
+      writtenCount += chunk.length;
+      if (onBatchDone) onBatchDone(writtenCount, parsedMaterials.length);
+    }));
   }
 
   return writtenCount;
@@ -238,10 +252,8 @@ export async function processAndUploadInventory(file, onProgress) {
     if (onProgress) onProgress({ step, message, percentage: pct });
   };
 
-  const TIMEOUT = 120000; // 120 seconds per step
-
   try {
-    // Step 1: Parse (client-side only, no timeout needed)
+    // Step 1: Parse (client-side only)
     progress(1, 'Parsing Excel file...', 10);
     const { materials, stats } = await parseExcelFile(file);
 
@@ -250,21 +262,26 @@ export async function processAndUploadInventory(file, onProgress) {
     }
 
     // Step 2: Upload raw file to Storage (optional — skips fast if Storage not activated)
-    progress(2, 'Uploading file to storage...', 25);
+    progress(2, 'Uploading file to storage...', 20);
     try {
       await withTimeout(uploadExcelToStorage(file), 5000, 'Storage upload');
     } catch (storageErr) {
       console.warn('Storage upload skipped:', storageErr.message);
-      // Continue — storage is optional, Firestore data is what matters
     }
 
-    // Step 3: Clear existing data
-    progress(3, 'Clearing previous inventory data...', 45);
-    await withTimeout(clearInventoryCollection(), TIMEOUT, 'Clearing inventory');
+    // Step 3: Clear existing data (no timeout — let it finish)
+    progress(3, 'Clearing previous inventory data...', 30);
+    await clearInventoryCollection((deleted, total) => {
+      const pct = 30 + Math.round((deleted / total) * 20);
+      progress(3, `Clearing old data... ${deleted.toLocaleString()}/${total.toLocaleString()}`, pct);
+    });
 
-    // Step 4: Write new data
-    progress(4, `Writing ${stats.totalMaterials.toLocaleString()} materials to database...`, 65);
-    await withTimeout(uploadInventoryData(materials, file.name), TIMEOUT * 2, 'Writing inventory');
+    // Step 4: Write new data (no timeout — with live progress)
+    progress(4, `Writing ${stats.totalMaterials.toLocaleString()} materials...`, 50);
+    await uploadInventoryData(materials, file.name, (written, total) => {
+      const pct = 50 + Math.round((written / total) * 45);
+      progress(4, `Writing materials... ${written.toLocaleString()}/${total.toLocaleString()}`, Math.min(pct, 95));
+    });
 
     // Done
     progress(5, 'Upload complete!', 100);
