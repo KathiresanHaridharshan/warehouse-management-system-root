@@ -232,7 +232,7 @@ export async function processAndUploadInventory(file, onProgress) {
     if (onProgress) onProgress({ step, message, percentage: pct });
   };
 
-  const TIMEOUT = 30000; // 30 seconds per step
+  const TIMEOUT = 120000; // 120 seconds per step
 
   try {
     // Step 1: Parse (client-side only, no timeout needed)
