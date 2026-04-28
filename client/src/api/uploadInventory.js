@@ -1,10 +1,17 @@
 import * as XLSX from 'xlsx';
 import { db } from '../firebase';
 import {
-  collection, doc, getDocs, getDoc, setDoc, deleteDoc, Timestamp
+  collection, doc, getDocs, getDoc, setDoc, deleteDoc,
+  writeBatch, Timestamp
 } from 'firebase/firestore';
 
 const INVENTORY_COLLECTION = 'inventory';
+
+// Firestore batch limit is 500 — use 499 for safety margin
+const BATCH_SIZE = 499;
+
+// How many batches to run concurrently (keeps speed high without hitting rate limits)
+const PARALLEL_BATCHES = 3;
 
 // Sanitize material code for Firestore doc ID
 function sanitizeDocId(code) {
@@ -12,6 +19,15 @@ function sanitizeDocId(code) {
   id = id.replace(/^\.+|\.+$/g, '');
   if (!id) id = 'unknown_' + Math.random().toString(36).slice(2, 8);
   return id;
+}
+
+// Split an array into chunks of a given size
+function chunkArray(arr, size) {
+  const chunks = [];
+  for (let i = 0; i < arr.length; i += size) {
+    chunks.push(arr.slice(i, i + size));
+  }
+  return chunks;
 }
 
 // ============================================================
@@ -118,7 +134,7 @@ export function parseExcelFile(file) {
 }
 
 // ============================================================
-// 2. CLEAR OLD INVENTORY (only if needed)
+// 2. CLEAR OLD INVENTORY (batched deletes — up to 500 per batch)
 // ============================================================
 async function clearInventory(onProgress) {
   const inventoryRef = collection(db, INVENTORY_COLLECTION);
@@ -127,12 +143,22 @@ async function clearInventory(onProgress) {
   if (snapshot.empty) return 0;
 
   const docs = snapshot.docs;
+  const chunks = chunkArray(docs, BATCH_SIZE);
   let deleted = 0;
 
-  // Delete one at a time to avoid quota spikes
-  for (const docSnap of docs) {
-    await deleteDoc(docSnap.ref);
-    deleted++;
+  // Process delete batches with controlled parallelism
+  for (let i = 0; i < chunks.length; i += PARALLEL_BATCHES) {
+    const batchGroup = chunks.slice(i, i + PARALLEL_BATCHES);
+
+    await Promise.all(
+      batchGroup.map((chunk) => {
+        const batch = writeBatch(db);
+        chunk.forEach((docSnap) => batch.delete(docSnap.ref));
+        return batch.commit();
+      })
+    );
+
+    deleted += batchGroup.reduce((sum, chunk) => sum + chunk.length, 0);
     if (onProgress) onProgress(deleted, docs.length);
   }
 
@@ -140,22 +166,35 @@ async function clearInventory(onProgress) {
 }
 
 // ============================================================
-// 3. WRITE INVENTORY DATA (one at a time to respect quota)
+// 3. WRITE INVENTORY DATA (batched writes — up to 500 per batch)
 // ============================================================
 async function writeInventory(materials, fileName, onProgress) {
   const now = Timestamp.now();
+  const chunks = chunkArray(materials, BATCH_SIZE);
   let written = 0;
 
-  for (const mat of materials) {
-    const docId = sanitizeDocId(mat.materialCode);
-    await setDoc(doc(db, INVENTORY_COLLECTION, docId), {
-      materialCode: mat.materialCode,
-      materialName: mat.materialName,
-      lastUpdated: now,
-      uploadedFileName: fileName,
-      stock: mat.stock
-    });
-    written++;
+  // Process write batches with controlled parallelism
+  for (let i = 0; i < chunks.length; i += PARALLEL_BATCHES) {
+    const batchGroup = chunks.slice(i, i + PARALLEL_BATCHES);
+
+    await Promise.all(
+      batchGroup.map((chunk) => {
+        const batch = writeBatch(db);
+        chunk.forEach((mat) => {
+          const docId = sanitizeDocId(mat.materialCode);
+          batch.set(doc(db, INVENTORY_COLLECTION, docId), {
+            materialCode: mat.materialCode,
+            materialName: mat.materialName,
+            lastUpdated: now,
+            uploadedFileName: fileName,
+            stock: mat.stock
+          });
+        });
+        return batch.commit();
+      })
+    );
+
+    written += batchGroup.reduce((sum, chunk) => sum + chunk.length, 0);
     if (onProgress) onProgress(written, materials.length);
   }
 
@@ -170,6 +209,8 @@ export async function processAndUploadInventory(file, onProgress) {
     if (onProgress) onProgress({ step, message, percentage: pct });
   };
 
+  const startTime = Date.now();
+
   try {
     // Step 1: Parse
     progress(1, 'Parsing Excel file...', 10);
@@ -178,6 +219,8 @@ export async function processAndUploadInventory(file, onProgress) {
     if (materials.length === 0) {
       throw new Error('No valid materials found in the file.');
     }
+
+    progress(1, `Parsed ${stats.totalMaterials.toLocaleString()} materials from ${stats.totalRows.toLocaleString()} rows`, 15);
 
     // Step 2: Test write access with a single doc
     progress(2, 'Checking access...', 20);
@@ -199,21 +242,23 @@ export async function processAndUploadInventory(file, onProgress) {
       throw err;
     }
 
-    // Step 3: Clear old data
-    progress(3, 'Clearing old data...', 30);
+    // Step 3: Clear old data (batched)
+    progress(3, 'Clearing old data...', 25);
     await clearInventory((done, total) => {
-      progress(3, `Clearing... ${done}/${total}`, 30 + Math.round((done / total) * 15));
+      const pct = 25 + Math.round((done / total) * 20);
+      progress(3, `Clearing... ${done.toLocaleString()}/${total.toLocaleString()}`, pct);
     });
 
-    // Step 4: Write new data
-    progress(4, `Writing 0/${stats.totalMaterials}...`, 50);
+    // Step 4: Write new data (batched with parallelism)
+    progress(4, `Writing 0/${stats.totalMaterials.toLocaleString()}...`, 50);
     await writeInventory(materials, file.name, (done, total) => {
       const pct = 50 + Math.round((done / total) * 45);
-      progress(4, `Writing... ${done}/${total}`, Math.min(pct, 95));
+      progress(4, `Writing... ${done.toLocaleString()}/${total.toLocaleString()}`, Math.min(pct, 95));
     });
 
     // Done!
-    progress(5, 'Upload complete!', 100);
+    const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+    progress(5, `Upload complete in ${elapsed}s!`, 100);
     return { success: true, stats };
 
   } catch (err) {
