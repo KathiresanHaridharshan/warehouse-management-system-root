@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { fetchInventoryForMaterial } from '../api/uploadInventory';
+import { fetchAllInventory } from '../api/uploadInventory';
 
 export default function StockOverview({ materialCode }) {
   const [inventory, setInventory] = useState(null);
@@ -18,7 +18,9 @@ export default function StockOverview({ materialCode }) {
       setLoading(true);
       setError('');
       try {
-        const data = await fetchInventoryForMaterial(materialCode);
+        // Uses the in-memory cache — no extra Firestore read
+        const allInventory = await fetchAllInventory();
+        const data = allInventory.get(materialCode.trim()) || null;
         if (!cancelled) setInventory(data);
       } catch (err) {
         if (!cancelled) setError(err.message);

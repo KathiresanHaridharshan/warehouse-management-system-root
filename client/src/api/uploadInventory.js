@@ -256,7 +256,8 @@ export async function processAndUploadInventory(file, onProgress) {
       progress(4, `Writing... ${done.toLocaleString()}/${total.toLocaleString()}`, Math.min(pct, 95));
     });
 
-    // Done!
+    // Done — invalidate cache so next read gets fresh data
+    invalidateInventoryCache();
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
     progress(5, `Upload complete in ${elapsed}s!`, 100);
     return { success: true, stats };
@@ -273,16 +274,53 @@ export async function processAndUploadInventory(file, onProgress) {
 }
 
 // ============================================================
-// 5. FETCH INVENTORY FOR A SINGLE MATERIAL
+// 5. INVENTORY CACHE — fetch ALL inventory in 1 read, cache for 5 min
 // ============================================================
+let _inventoryCache = null;
+let _inventoryCacheTime = 0;
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+/**
+ * Fetch the entire inventory collection in a SINGLE Firestore read.
+ * Returns a Map keyed by materialCode → inventory doc data.
+ * Cached in memory for 5 minutes to avoid repeated reads on refresh.
+ */
+export async function fetchAllInventory(forceRefresh = false) {
+  const now = Date.now();
+  if (!forceRefresh && _inventoryCache && (now - _inventoryCacheTime < CACHE_TTL_MS)) {
+    return _inventoryCache;
+  }
+
+  const inventoryRef = collection(db, INVENTORY_COLLECTION);
+  const snapshot = await getDocs(inventoryRef);
+
+  const map = new Map();
+  snapshot.docs.forEach((docSnap) => {
+    const data = docSnap.data();
+    if (data.materialCode) {
+      map.set(data.materialCode, { id: docSnap.id, ...data });
+    }
+  });
+
+  _inventoryCache = map;
+  _inventoryCacheTime = now;
+  return map;
+}
+
+/** Invalidate the inventory cache (call after a new SAP upload) */
+export function invalidateInventoryCache() {
+  _inventoryCache = null;
+  _inventoryCacheTime = 0;
+}
+
+/**
+ * Fetch inventory for a single material — uses the cache.
+ * No extra Firestore reads if cache is warm.
+ */
 export async function fetchInventoryForMaterial(materialCode) {
   if (!materialCode) return null;
-
   const trimmedCode = materialCode.trim();
-  const docId = sanitizeDocId(trimmedCode);
-  const docRef = doc(db, INVENTORY_COLLECTION, docId);
-  const docSnap = await getDoc(docRef);
 
-  if (!docSnap.exists()) return null;
-  return { id: docSnap.id, ...docSnap.data() };
+  const cache = await fetchAllInventory();
+  return cache.get(trimmedCode) || null;
 }

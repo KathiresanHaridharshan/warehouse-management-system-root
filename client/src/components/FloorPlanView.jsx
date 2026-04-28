@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import PalletSlot from './PalletSlot';
 import FloorPlanEditor from './FloorPlanEditor';
 import { fetchFloorPlan, saveFloorPlan, parseSlot } from '../api/materials';
-import { fetchInventoryForMaterial } from '../api/uploadInventory';
+import { fetchAllInventory } from '../api/uploadInventory';
 
 export default function FloorPlanView({ materials, onCardClick, onToast }) {
   const [config, setConfig] = useState(null);
@@ -24,7 +24,7 @@ export default function FloorPlanView({ materials, onCardClick, onToast }) {
 
   useEffect(() => { loadConfig(); }, [loadConfig]);
 
-  // Fetch SAP inventory for all assigned materials
+  // Fetch SAP inventory in a SINGLE Firestore read (cached for 5 min)
   useEffect(() => {
     if (!config || !materials.length) return;
 
@@ -41,23 +41,27 @@ export default function FloorPlanView({ materials, onCardClick, onToast }) {
 
     if (assignedCodes.size === 0) return;
 
+    let cancelled = false;
     const fetchAll = async () => {
-      const map = {};
-      for (const code of assignedCodes) {
-        try {
-          const inv = await fetchInventoryForMaterial(code);
+      try {
+        const allInventory = await fetchAllInventory();
+        if (cancelled) return;
+        const map = {};
+        for (const code of assignedCodes) {
+          const inv = allInventory.get(code);
           if (inv && inv.stock) {
             const total = inv.stock.reduce((sum, s) => sum + (s.quantity || 0), 0);
             const unit = inv.stock[0]?.unit || 'KG';
             map[code] = { total, unit };
           }
-        } catch {
-          // Skip — quota exhausted or no data
         }
+        setInventoryMap(map);
+      } catch {
+        // Skip — quota exhausted or no data
       }
-      setInventoryMap(map);
     };
     fetchAll();
+    return () => { cancelled = true; };
   }, [config, materials]);
 
   useEffect(() => {
